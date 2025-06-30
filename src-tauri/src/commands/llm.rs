@@ -65,6 +65,12 @@ struct OllamaOptions {
 struct OllamaResponse {
     response: String,
     done: bool,
+    prompt_eval_count: Option<u32>,
+    eval_count: Option<u32>,
+    total_duration: Option<u64>,
+    load_duration: Option<u64>,
+    prompt_eval_duration: Option<u64>,
+    eval_duration: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -329,6 +335,22 @@ pub struct StreamingResponse {
     pub is_complete: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextUsage {
+    pub used_tokens: u32,
+    pub max_tokens: u32,
+    pub percentage: f32,
+    pub prompt_tokens: u32,
+    pub response_tokens: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationState {
+    pub total_prompt_tokens: u32,
+    pub total_response_tokens: u32,
+    pub messages: Vec<String>,
+}
+
 #[tauri::command]
 pub async fn stream_response_for_question(app: AppHandle, question: DetectedQuestion) -> Result<(), String> {
     let config = LlmConfig::default(); // TODO: Get from actual config
@@ -448,6 +470,167 @@ pub async fn query_question(_question_text: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt: String, conversation_history: Option<String>) -> Result<(), String> {
+    let client = Client::new();
+    
+    // Handle conversation history and context window limits
+    let (effective_history, was_truncated) = if let Some(history) = &conversation_history {
+        if history.trim().is_empty() {
+            (String::new(), false)
+        } else {
+            truncate_conversation_for_context(history, &prompt, 4096)
+        }
+    } else {
+        (String::new(), false)
+    };
+    
+    // Emit context truncation warning if needed
+    if was_truncated {
+        let _ = app.emit("context_truncated", serde_json::json!({
+            "message": "Context window full - older messages have been forgotten to make room for new conversation."
+        }));
+    }
+    
+    // Build full prompt with (possibly truncated) conversation history
+    let full_prompt = if effective_history.is_empty() {
+        format_prompt(&prompt, None)
+    } else {
+        format!("{}\n\nUser: {}\nAssistant:", effective_history, prompt)
+    };
+    
+    let ollama_request = OllamaRequest {
+        model: model.clone(),
+        prompt: full_prompt.clone(),
+        stream: true,
+        options: OllamaOptions {
+            temperature: 0.7,
+            num_predict: 4096,
+        },
+    };
+    
+    let url = "http://localhost:11434/api/generate";
+    
+    // Emit initial context usage with estimation (will be updated with real counts)
+    let estimated_prompt_tokens = estimate_tokens(&full_prompt);
+    
+    let initial_usage = ContextUsage {
+        used_tokens: estimated_prompt_tokens,
+        max_tokens: 4096,
+        percentage: (estimated_prompt_tokens as f32 / 4096.0) * 100.0,
+        prompt_tokens: estimated_prompt_tokens,
+        response_tokens: 0,
+    };
+    
+    let _ = app.emit("context_usage", &initial_usage);
+    
+    // Emit initial streaming event to show empty content immediately
+    let _ = app.emit("ollama_stream", serde_json::json!({
+        "content": "",
+        "done": false
+    }));
+    
+    let mut response = client.post(url)
+        .json(&ollama_request)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to Ollama: {}. Make sure Ollama is running.", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Ollama returned error: {}. Try running 'ollama pull {}' first.", response.status(), model));
+    }
+    
+    let mut accumulated_response = String::new();
+    let mut buffer = Vec::new();
+    
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Chunk error: {}", e))? {
+        buffer.extend_from_slice(&chunk);
+        
+        // Try to parse complete JSON objects from buffer
+        if let Some(newline_pos) = buffer.iter().position(|&b| b == b'\n') {
+            let line = buffer.drain(..=newline_pos).collect::<Vec<u8>>();
+            let line_str = String::from_utf8_lossy(&line[..line.len()-1]); // Remove newline
+            
+            if let Ok(ollama_response) = serde_json::from_str::<OllamaResponse>(&line_str) {
+                accumulated_response.push_str(&ollama_response.response);
+                
+                // Emit streaming update to frontend
+                let _ = app.emit("ollama_stream", serde_json::json!({
+                    "content": accumulated_response.clone(),
+                    "done": ollama_response.done
+                }));
+                
+                if ollama_response.done {
+                    // Use real token counts from Ollama when available
+                    let prompt_tokens = ollama_response.prompt_eval_count.unwrap_or(estimated_prompt_tokens);
+                    let response_tokens = ollama_response.eval_count.unwrap_or(estimate_tokens(&accumulated_response));
+                    let total_tokens = prompt_tokens + response_tokens;
+                    
+                    let final_usage = ContextUsage {
+                        used_tokens: total_tokens,
+                        max_tokens: 4096,
+                        percentage: (total_tokens as f32 / 4096.0) * 100.0,
+                        prompt_tokens,
+                        response_tokens,
+                    };
+                    
+                    let _ = app.emit("context_usage", &final_usage);
+                    
+                    // Also emit truncation warning if context was truncated
+                    if was_truncated {
+                        let _ = app.emit("context_truncated", serde_json::json!({
+                            "message": "Context window is getting full. Older messages may be forgotten in future conversations."
+                        }));
+                    }
+                    
+                    break;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn calculate_context_usage_command(conversation_history: String) -> Result<ContextUsage, String> {
+    let usage = calculate_context_usage_estimate(&conversation_history, 4096);
+    Ok(usage)
+}
+
+#[tauri::command]
+pub async fn query_ollama_simple(model: String, prompt: String) -> Result<String, String> {
+    let client = Client::new();
+    
+    let ollama_request = OllamaRequest {
+        model,
+        prompt: format_prompt(&prompt, None),
+        stream: false,
+        options: OllamaOptions {
+            temperature: 0.7,
+            num_predict: 4096,
+        },
+    };
+    
+    let url = "http://localhost:11434/api/generate";
+    let response = timeout(Duration::from_secs(30), 
+        client.post(url)
+            .json(&ollama_request)
+            .send()
+    ).await
+        .map_err(|_| "Ollama request timed out. Make sure Ollama is running with 'ollama serve'.".to_string())?
+        .map_err(|e| format!("Failed to connect to Ollama: {}. Make sure Ollama is running.", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Ollama returned error: {}. Try running 'ollama pull devstral' first.", response.status()));
+    }
+    
+    let ollama_response: OllamaResponse = response.json().await
+        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+    
+    Ok(ollama_response.response)
+}
+
 fn format_prompt(prompt: &str, context: Option<&str>) -> String {
     let base_prompt = format!(
         "You are a helpful AI assistant. Please provide a concise, accurate answer to this question: {}\n\n",
@@ -459,4 +642,62 @@ fn format_prompt(prompt: &str, context: Option<&str>) -> String {
     } else {
         format!("{}Answer:", base_prompt)
     }
+}
+
+// Estimate token count - rough approximation: 1 token ≈ 4 characters for English text
+fn estimate_tokens(text: &str) -> u32 {
+    (text.len() as f32 / 4.0).ceil() as u32
+}
+
+// Calculate context usage based on conversation history (fallback for estimation)
+fn calculate_context_usage_estimate(conversation_text: &str, max_tokens: u32) -> ContextUsage {
+    let estimated_tokens = estimate_tokens(conversation_text);
+    let percentage = (estimated_tokens as f32 / max_tokens as f32) * 100.0;
+    
+    ContextUsage {
+        used_tokens: estimated_tokens,
+        max_tokens,
+        percentage: percentage.min(100.0),
+        prompt_tokens: estimated_tokens,
+        response_tokens: 0,
+    }
+}
+
+// Truncate conversation history to fit within context window
+fn truncate_conversation_for_context(conversation_history: &str, new_prompt: &str, max_tokens: u32) -> (String, bool) {
+    let reserve_tokens = 512; // Reserve space for response
+    let available_tokens = max_tokens.saturating_sub(reserve_tokens);
+    
+    let new_prompt_tokens = estimate_tokens(new_prompt);
+    let history_budget = available_tokens.saturating_sub(new_prompt_tokens);
+    
+    if conversation_history.is_empty() {
+        return (conversation_history.to_string(), false);
+    }
+    
+    let history_tokens = estimate_tokens(conversation_history);
+    
+    if history_tokens <= history_budget {
+        return (conversation_history.to_string(), false);
+    }
+    
+    // Need to truncate - keep the most recent messages
+    let lines: Vec<&str> = conversation_history.lines().collect();
+    let mut truncated_lines = Vec::new();
+    let mut current_tokens = 0u32;
+    
+    // Add lines from the end until we hit the budget
+    for line in lines.iter().rev() {
+        let line_tokens = estimate_tokens(line);
+        if current_tokens + line_tokens > history_budget {
+            break;
+        }
+        truncated_lines.push(*line);
+        current_tokens += line_tokens;
+    }
+    
+    // Reverse to restore chronological order
+    truncated_lines.reverse();
+    
+    (truncated_lines.join("\n"), true)
 }

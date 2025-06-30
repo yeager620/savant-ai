@@ -13,30 +13,21 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "dashboard",
-        "title": "Savant AI Dashboard",
-        "width": 1000,
-        "height": 700,
+        "label": "main",
+        "title": "Savant AI",
+        "width": 300,
+        "height": 600,
         "resizable": true,
         "fullscreen": false,
         "transparent": true,
         "decorations": true,
-        "alwaysOnTop": false,
-        "skipTaskbar": false,
-        "visible": false
-      },
-      {
-        "label": "overlay",
-        "title": "Savant AI Overlay",
-        "fullscreen": true,
-        "transparent": true,
-        "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": false,
-        "resizable": false,
-        "maximized": false,
-        "center": false
+        "visible": true,
+        "x": 0,
+        "y": 100,
+        "minWidth": 280,
+        "minHeight": 400
       }
     ],
     "security": {
