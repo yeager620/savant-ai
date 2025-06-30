@@ -2,7 +2,8 @@ use anyhow::Result;
 use screenshots::Screen;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::Window;
+use std::sync::Mutex;
+use tauri::{AppHandle, Manager, Window, WebviewWindowBuilder, WebviewUrl};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StealthConfig {
@@ -22,7 +23,7 @@ impl Default for StealthConfig {
 }
 
 #[tauri::command]
-pub async fn enable_stealth_mode(window: Window) -> Result<(), String> {
+pub async fn enable_stealth_mode(_window: Window) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // macOS stealth implementation will be added later
@@ -45,7 +46,7 @@ pub async fn enable_stealth_mode(window: Window) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn disable_stealth_mode(window: Window) -> Result<(), String> {
+pub async fn disable_stealth_mode(_window: Window) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // macOS stealth implementation will be added later
@@ -132,4 +133,106 @@ pub async fn hide_window_from_capture(window: Window) -> Result<(), String> {
 #[tauri::command]
 pub async fn show_window_in_capture(window: Window) -> Result<(), String> {
     disable_stealth_mode(window).await
+}
+
+// Store overlay window state
+static OVERLAY_WINDOW_CREATED: Mutex<bool> = Mutex::new(false);
+
+#[tauri::command]
+pub async fn create_invisible_overlay(app: AppHandle) -> Result<(), String> {
+    let mut overlay_created = OVERLAY_WINDOW_CREATED.lock().unwrap();
+    if *overlay_created {
+        return Ok(());
+    }
+
+    let overlay_window = WebviewWindowBuilder::new(
+        &app,
+        "overlay",
+        WebviewUrl::App("/overlay".into())
+    )
+    .title("Savant AI Overlay")
+    .fullscreen(true)
+    .transparent(true)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .visible(false)
+    .build()
+    .map_err(|e| format!("Failed to create overlay window: {}", e))?;
+
+    // Platform-specific invisibility settings
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::appkit::NSWindow;
+        use objc::runtime::Object;
+        use objc::*;
+        
+        if let Ok(ns_window) = overlay_window.ns_window() {
+            unsafe {
+                let ns_window_ptr = ns_window as *mut Object;
+                let _: () = msg_send![ns_window_ptr, setSharingType: 0]; // NSWindowSharingNone = 0
+                let _: () = msg_send![ns_window_ptr, setIgnoresMouseEvents: true];
+                let _: () = msg_send![ns_window_ptr, setLevel: 25]; // Float above all other windows
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::*;
+        use windows::Win32::Foundation::HWND;
+        
+        if let Ok(hwnd) = overlay_window.hwnd() {
+            unsafe {
+                let hwnd = HWND(hwnd.0);
+                // Make window click-through and invisible to capture
+                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                SetWindowLongW(hwnd, GWL_EXSTYLE, 
+                    ex_style | WS_EX_LAYERED.0 as i32 | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOOLWINDOW.0 as i32);
+            }
+        }
+    }
+
+    // Start the overlay as visible but transparent
+    overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
+    
+    *overlay_created = true;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn show_overlay_window(app: AppHandle) -> Result<(), String> {
+    if let Some(overlay_window) = app.get_webview_window("overlay") {
+        overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
+    } else {
+        create_invisible_overlay(app).await?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hide_overlay_window(app: AppHandle) -> Result<(), String> {
+    if let Some(overlay_window) = app.get_webview_window("overlay") {
+        overlay_window.hide().map_err(|e| format!("Failed to hide overlay: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn toggle_overlay_window(app: AppHandle) -> Result<bool, String> {
+    if let Some(overlay_window) = app.get_webview_window("overlay") {
+        let is_visible = overlay_window.is_visible().map_err(|e| format!("Failed to check visibility: {}", e))?;
+        
+        if is_visible {
+            overlay_window.hide().map_err(|e| format!("Failed to hide overlay: {}", e))?;
+            Ok(false)
+        } else {
+            overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
+            Ok(true)
+        }
+    } else {
+        create_invisible_overlay(app).await?;
+        Ok(true)
+    }
 }

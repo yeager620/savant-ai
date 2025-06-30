@@ -13,6 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "dashboard",
         "title": "Savant AI Dashboard",
         "width": 1000,
         "height": 700,
@@ -22,7 +23,20 @@
         "decorations": true,
         "alwaysOnTop": false,
         "skipTaskbar": false,
-        "visible": true
+        "visible": false
+      },
+      {
+        "label": "overlay",
+        "title": "Savant AI Overlay",
+        "fullscreen": true,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "maximized": false,
+        "center": false
       }
     ],
     "security": {

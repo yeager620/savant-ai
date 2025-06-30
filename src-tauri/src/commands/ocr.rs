@@ -1,6 +1,10 @@
 use anyhow::{anyhow, Result};
 use screenshots::Screen;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
+use uuid::Uuid;
+use regex::Regex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Question {
@@ -13,9 +17,74 @@ pub struct Question {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedQuestion {
+    pub id: String,
+    pub text: String,
+    pub confidence: f32,
+    pub bounding_box: BoundingBox,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoundingBox {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrResult {
     pub questions: Vec<Question>,
     pub processed_at: String,
+}
+
+static SCANNING_STATE: Mutex<bool> = Mutex::const_new(false);
+
+#[tauri::command]
+pub async fn start_overlay_scanning(app: AppHandle) -> Result<(), String> {
+    let mut is_scanning = SCANNING_STATE.lock().await;
+    if *is_scanning {
+        return Ok(());
+    }
+    *is_scanning = true;
+    
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        continuous_screen_scan(app_clone).await;
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_overlay_scanning() -> Result<(), String> {
+    let mut is_scanning = SCANNING_STATE.lock().await;
+    *is_scanning = false;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn scan_for_questions() -> Result<Vec<DetectedQuestion>, String> {
+    let screenshot = take_screenshot_internal().await
+        .map_err(|e| format!("Failed to take screenshot: {}", e))?;
+    
+    let ocr_result = process_screenshot_internal(screenshot).await?;
+    
+    let detected_questions = ocr_result.questions.into_iter()
+        .map(|q| DetectedQuestion {
+            id: Uuid::new_v4().to_string(),
+            text: q.text,
+            confidence: q.confidence,
+            bounding_box: BoundingBox {
+                x: q.x as f32,
+                y: q.y as f32,
+                width: q.width as f32,
+                height: q.height as f32,
+            },
+        })
+        .collect();
+    
+    Ok(detected_questions)
 }
 
 #[tauri::command]
@@ -125,4 +194,38 @@ fn is_question_text(text: &str) -> bool {
     }
     
     false
+}
+
+async fn continuous_screen_scan(app: AppHandle) {
+    loop {
+        {
+            let is_scanning = SCANNING_STATE.lock().await;
+            if !*is_scanning {
+                break;
+            }
+        }
+        
+        if let Ok(questions) = scan_for_questions().await {
+            if !questions.is_empty() {
+                // Emit detected questions to frontend
+                let _ = app.emit("questions_detected", &questions);
+                
+                // Trigger AI processing for each question
+                for question in questions {
+                    let app_clone = app.clone();
+                    let question_clone = question.clone();
+                    tokio::spawn(async move {
+                        if let Ok(()) = crate::commands::llm::stream_response_for_question(
+                            app_clone, 
+                            question_clone
+                        ).await {
+                            // Response streaming handled by LLM module
+                        }
+                    });
+                }
+            }
+        }
+        
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
 }
