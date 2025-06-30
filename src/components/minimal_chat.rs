@@ -72,6 +72,7 @@ pub fn MinimalChat() -> impl IntoView {
     let set_messages_listener = set_messages.clone();
     let set_context_usage_listener = set_context_usage.clone();
     let set_context_warning_listener = set_context_warning.clone();
+    let set_input_text_listener = set_input_text.clone();
     
     spawn_local(async move {
         setup_streaming_listener(
@@ -81,6 +82,8 @@ pub fn MinimalChat() -> impl IntoView {
             set_context_usage_listener,
             set_context_warning_listener,
         ).await;
+        
+        setup_prompt_selection_listener(set_input_text_listener).await;
     });
 
     let send_message = move |_: web_sys::MouseEvent| {
@@ -216,6 +219,17 @@ pub fn MinimalChat() -> impl IntoView {
         <div class="minimal-chat">
             <div class="chat-header">
                 <h3>"Savant AI"</h3>
+                <button 
+                    class="browser-toggle"
+                    title="Browser Assistant"
+                    on:click=move |_| {
+                        let window = web_sys::window().unwrap();
+                        let event = web_sys::CustomEvent::new("toggle_browser_mode").unwrap();
+                        let _ = window.dispatch_event(&event);
+                    }
+                >
+                    "🌐"
+                </button>
                 <div class="header-right">
                     <button 
                         class="clear-button"
@@ -445,5 +459,27 @@ fn render_markdown(content: &str) -> String {
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
     html_output
+}
+
+async fn setup_prompt_selection_listener(set_input_text: WriteSignal<String>) {
+    #[wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
+        async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
+    }
+    
+    let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
+        if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
+            if let Some(payload) = event_data.get("payload") {
+                if let Some(text) = payload.get("text").and_then(|t| t.as_str()) {
+                    console::log_1(&format!("Received selected prompt: {}", text).into());
+                    set_input_text.set(text.to_string());
+                }
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    let _ = listen("prompt_selected", handler.as_ref().unchecked_ref()).await;
+    handler.forget();
 }
 

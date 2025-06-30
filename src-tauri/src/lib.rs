@@ -16,6 +16,12 @@ pub fn run() {
             get_config,
             save_config,
             reset_config,
+            // Browser monitoring commands
+            start_browser_monitoring,
+            stop_browser_monitoring,
+            get_browser_state,
+            select_prompt,
+            set_active_window,
             // OCR commands
             detect_questions,
             process_screenshot,

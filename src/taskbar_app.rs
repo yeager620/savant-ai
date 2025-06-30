@@ -1,11 +1,251 @@
 use leptos::prelude::*;
+use leptos::task::spawn_local;
+use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
+use web_sys::console;
 use crate::components::MinimalChat;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserWindow {
+    pub id: String,
+    pub title: String,
+    pub app_name: String,
+    pub is_active: bool,
+    pub content: String,
+    pub detected_prompts: Vec<DetectedPrompt>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedPrompt {
+    pub id: String,
+    pub text: String,
+    pub confidence: f32,
+    pub priority: f32,
+    pub window_id: String,
+    pub context: String,
+    pub position: PromptPosition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptPosition {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserState {
+    pub is_connected: bool,
+    pub active_window_id: Option<String>,
+    pub windows: std::collections::HashMap<String, BrowserWindow>,
+    pub top_prompts: Vec<DetectedPrompt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum AppMode {
+    Chat,
+    Browser,
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
+    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
+    async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
+}
 
 #[component]
 pub fn TaskbarApp() -> impl IntoView {
+    let (app_mode, set_app_mode) = signal(AppMode::Chat);
+    let (browser_state, set_browser_state) = signal(BrowserState {
+        is_connected: false,
+        active_window_id: None,
+        windows: std::collections::HashMap::new(),
+        top_prompts: Vec::new(),
+    });
+    let (selected_index, set_selected_index) = signal(0usize);
+    let (is_monitoring, set_is_monitoring) = signal(false);
+    
+    // Setup browser event listeners
+    spawn_local(async move {
+        setup_browser_event_listeners(set_browser_state).await;
+    });
+    
+    // Handle keyboard navigation for browser mode
+    let handle_keydown = move |ev: web_sys::KeyboardEvent| {
+        if app_mode.get() != AppMode::Browser {
+            return;
+        }
+        
+        let prompts = browser_state.get().top_prompts;
+        if prompts.is_empty() {
+            return;
+        }
+
+        match ev.key().as_str() {
+            "ArrowDown" => {
+                ev.prevent_default();
+                set_selected_index.update(|idx| {
+                    *idx = (*idx + 1).min(prompts.len().saturating_sub(1));
+                });
+            }
+            "ArrowUp" => {
+                ev.prevent_default();
+                set_selected_index.update(|idx| {
+                    *idx = idx.saturating_sub(1);
+                });
+            }
+            "Enter" => {
+                ev.prevent_default();
+                let current_idx = selected_index.get();
+                if let Some(prompt) = prompts.get(current_idx) {
+                    let prompt_id = prompt.id.clone();
+                    spawn_local(async move {
+                        let _ = select_prompt(prompt_id).await;
+                    });
+                }
+            }
+            "Escape" => {
+                ev.prevent_default();
+                set_app_mode.set(AppMode::Chat);
+            }
+            _ => {}
+        }
+    };
+    
+    // Add global keydown event listener
+    spawn_local(async move {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        
+        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(handle_keydown) as Box<dyn FnMut(_)>);
+        document
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    });
+    
+    // Listen for browser toggle events
+    let toggle_mode = set_app_mode.clone();
+    let get_mode = app_mode.clone();
+    spawn_local(async move {
+        let window = web_sys::window().unwrap();
+        
+        let toggle_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::Event| {
+            let current_mode = get_mode.get_untracked();
+            match current_mode {
+                AppMode::Chat => toggle_mode.set(AppMode::Browser),
+                AppMode::Browser => toggle_mode.set(AppMode::Chat),
+            }
+        }) as Box<dyn FnMut(_)>);
+        
+        window
+            .add_event_listener_with_callback("toggle_browser_mode", toggle_handler.as_ref().unchecked_ref())
+            .unwrap();
+        toggle_handler.forget();
+    });
+    
+    // Auto-start monitoring when switching to browser mode
+    let _effect = Effect::new(move |_| {
+        let mode = app_mode.get();
+        if mode == AppMode::Browser && !is_monitoring.get() {
+            spawn_local(async move {
+                if let Ok(_) = start_browser_monitoring().await {
+                    set_is_monitoring.set(true);
+                }
+            });
+        } else if mode == AppMode::Chat && is_monitoring.get() {
+            spawn_local(async move {
+                let _ = stop_browser_monitoring().await;
+                set_is_monitoring.set(false);
+            });
+        }
+    });
     view! {
         <div class="taskbar-app">
-            <MinimalChat />
+            <Show when=move || app_mode.get() == AppMode::Chat>
+                <MinimalChat />
+            </Show>
+            
+            <Show when=move || app_mode.get() == AppMode::Browser>
+                <div class="browser-mode">
+                    <div class="browser-header">
+                        <h3>"Browser Assistant"</h3>
+                        <div class="browser-status">
+                            {move || if browser_state.get().is_connected { "🟢" } else { "🔴" }}
+                        </div>
+                    </div>
+                    
+                    <Show when=move || !browser_state.get().top_prompts.is_empty()>
+                        <div class="prompt-list">
+                            <For
+                                each=move || browser_state.get().top_prompts.clone().into_iter().enumerate()
+                                key=|(i, prompt)| (i.clone(), prompt.id.clone())
+                                children=move |(index, prompt)| {
+                                    let is_selected = move || selected_index.get() == index;
+                                    let prompt_clone = prompt.clone();
+                                    
+                                    view! {
+                                        <div 
+                                            class="prompt-item"
+                                            class:selected=is_selected
+                                            on:click=move |_| {
+                                                set_selected_index.set(index);
+                                                let prompt_id = prompt_clone.id.clone();
+                                                spawn_local(async move {
+                                                    let _ = select_prompt(prompt_id).await;
+                                                });
+                                            }
+                                        >
+                                            <div class="prompt-text">
+                                                {prompt.text.clone()}
+                                            </div>
+                                            <div class="prompt-meta">
+                                                <span class="confidence">
+                                                    {format!("{}%", (prompt.confidence * 100.0) as i32)}
+                                                </span>
+                                                <span class="window-title">
+                                                    {move || {
+                                                        browser_state.get().windows
+                                                            .get(&prompt.window_id)
+                                                            .map(|window| format!("{}: {}", window.app_name, window.title))
+                                                            .unwrap_or_else(|| "Unknown".to_string())
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                    </Show>
+                    
+                    <Show when=move || browser_state.get().is_connected && browser_state.get().top_prompts.is_empty()>
+                        <div class="scanning-message">
+                            <div class="spinner"></div>
+                            "Scanning for prompts..."
+                        </div>
+                    </Show>
+                    
+                    <Show when=move || !browser_state.get().is_connected>
+                        <div class="connection-message">
+                            "Enable Accessibility permissions:\nSystem Preferences > Security & Privacy > Privacy > Accessibility\n\nAdd Savant AI to the list and check the box."
+                        </div>
+                    </Show>
+                    
+                    <div class="browser-controls">
+                        <button 
+                            class="back-btn"
+                            on:click=move |_| set_app_mode.set(AppMode::Chat)
+                        >
+                            "← Back to Chat"
+                        </button>
+                    </div>
+                </div>
+            </Show>
             
             // Taskbar-specific CSS
             <style>
@@ -48,6 +288,26 @@ pub fn TaskbarApp() -> impl IntoView {
                     padding: 8px 0;
                     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     margin-bottom: 12px;
+                    position: relative;
+                }
+                
+                .browser-toggle {
+                    position: absolute;
+                    top: -2px;
+                    right: 120px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 4px;
+                    padding: 2px 6px;
+                    color: rgba(255, 255, 255, 0.8);
+                    font-size: 10px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .browser-toggle:hover {
+                    background: rgba(255, 255, 255, 0.2);
+                    color: white;
                 }
                 
                 .header-right {
@@ -345,8 +605,191 @@ pub fn TaskbarApp() -> impl IntoView {
                 .chat-input button:active {
                     transform: translateY(0);
                 }
+                
+                /* Browser Mode Styles */
+                .browser-mode {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    padding: 12px;
+                }
+                
+                .browser-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 8px 0;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    margin-bottom: 12px;
+                }
+                
+                .browser-header h3 {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #ffffff;
+                    margin: 0;
+                }
+                
+                .browser-status {
+                    font-size: 12px;
+                }
+                
+                .prompt-list {
+                    flex: 1;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                }
+                
+                .prompt-item {
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 6px;
+                    padding: 8px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .prompt-item:hover {
+                    background: rgba(255, 255, 255, 0.1);
+                    border-color: rgba(0, 255, 65, 0.3);
+                }
+                
+                .prompt-item.selected {
+                    background: rgba(0, 255, 65, 0.1);
+                    border-color: #00ff41;
+                    box-shadow: 0 1px 4px rgba(0, 255, 65, 0.2);
+                }
+                
+                .prompt-text {
+                    font-size: 11px;
+                    font-weight: 500;
+                    margin-bottom: 4px;
+                    line-height: 1.3;
+                    color: white;
+                }
+                
+                .prompt-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 9px;
+                    opacity: 0.7;
+                }
+                
+                .confidence {
+                    color: #4CAF50;
+                    font-weight: 500;
+                }
+                
+                .window-title {
+                    color: #2196F3;
+                    max-width: 120px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                
+                .scanning-message {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 11px;
+                    opacity: 0.7;
+                }
+                
+                .connection-message {
+                    padding: 12px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 6px;
+                    font-size: 10px;
+                    line-height: 1.3;
+                    white-space: pre-line;
+                    margin-bottom: 12px;
+                    opacity: 0.8;
+                }
+                
+                .spinner {
+                    width: 12px;
+                    height: 12px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-top: 1px solid #00ff41;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+                
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                .browser-controls {
+                    margin-top: auto;
+                }
+                
+                .back-btn {
+                    width: 100%;
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 6px;
+                    padding: 8px;
+                    color: white;
+                    font-size: 11px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .back-btn:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                }
                 "
             </style>
         </div>
     }
+}
+
+async fn setup_browser_event_listeners(set_browser_state: WriteSignal<BrowserState>) {
+    // Listen for browser state updates
+    let state_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
+        if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
+            if let Some(payload) = event_data.get("payload") {
+                if let Ok(browser_state) = serde_json::from_value::<BrowserState>(payload.clone()) {
+                    console::log_1(&format!("Browser state updated: {} windows, {} prompts", 
+                        browser_state.windows.len(), 
+                        browser_state.top_prompts.len()).into());
+                    set_browser_state.set(browser_state);
+                }
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    let _ = listen("browser_state_updated", state_handler.as_ref().unchecked_ref()).await;
+    state_handler.forget();
+}
+
+async fn start_browser_monitoring() -> Result<(), String> {
+    let result = invoke("start_browser_monitoring", serde_wasm_bindgen::to_value(&()).unwrap()).await;
+    serde_wasm_bindgen::from_value::<()>(result)
+        .map_err(|e| format!("Failed to start browser monitoring: {}", e))
+}
+
+async fn stop_browser_monitoring() -> Result<(), String> {
+    let result = invoke("stop_browser_monitoring", serde_wasm_bindgen::to_value(&()).unwrap()).await;
+    serde_wasm_bindgen::from_value::<()>(result)
+        .map_err(|e| format!("Failed to stop browser monitoring: {}", e))
+}
+
+async fn select_prompt(prompt_id: String) -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "prompt_id": prompt_id
+    })).unwrap();
+    
+    let result = invoke("select_prompt", args).await;
+    serde_wasm_bindgen::from_value::<()>(result)
+        .map_err(|e| format!("Failed to select prompt: {}", e))
 }

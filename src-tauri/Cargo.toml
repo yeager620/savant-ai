@@ -40,6 +40,7 @@ regex = "1.0"
 cocoa = "0.25"
 objc = "0.2"
 core-graphics = "0.23"
+core-foundation = "0.9"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.51", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
