@@ -241,11 +241,7 @@ pub async fn query_ollama_chat_streaming(
 - ✅ **Core Architecture**: Tauri 2.0 + Leptos 0.7 foundation
 - ✅ **Chat Memory**: Perfect conversation persistence with structured messages
 - ✅ **Multi-Provider AI**: Ollama, OpenAI, DeepSeek, Anthropic support
-- ✅ **Stealth System**: Invisible overlays with screenshot protection
-- ✅ **Question Detection**: OCR-based text scanning with smart filtering
-- ✅ **Global Hotkeys**: Cross-platform keyboard shortcuts
 - ✅ **Real-time Streaming**: Live AI response rendering
-- ✅ **Configuration**: Persistent TOML settings with reactive UI
 
 ### **Development Roadmap** 🔄
 
@@ -259,26 +255,3 @@ pub async fn query_ollama_chat_streaming(
 - [ ] **Voice Integration**: Audio responses and voice queries
 - [ ] **Collaborative Features**: Shared Q&A knowledge bases
 
-## **Privacy & Security**
-
-- **Local Processing**: OCR and question detection performed locally
-- **No Data Collection**: No telemetry or usage tracking
-- **API Isolation**: Only detected questions sent to AI providers, never full screen content
-- **User Control**: Clear history button and configurable AI providers
-- **Open Source**: Full transparency of data handling
-
-## **Contributing**
-
-```bash
-# Run tests
-cargo test --workspace
-
-# Code quality
-cargo check --workspace
-cargo clippy --workspace
-
-# Test specific features
-cargo test -p savant-ai-lib
-```
-
-Built with ❤️ using Rust, Tauri, and Leptos for maximum performance and security.
