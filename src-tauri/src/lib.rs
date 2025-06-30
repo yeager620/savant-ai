@@ -30,7 +30,12 @@ pub fn run() {
             query_question,
             query_ollama_simple,
             query_ollama_streaming_simple,
+            query_ollama_chat_streaming,
             calculate_context_usage_command,
+            // Chat history commands
+            save_chat_history,
+            load_chat_history,
+            clear_chat_history,
             // System commands
             enable_stealth_mode,
             disable_stealth_mode,

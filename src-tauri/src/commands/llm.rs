@@ -56,6 +56,20 @@ struct OllamaRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct OllamaChatRequest {
+    model: String,
+    messages: Vec<OllamaChatMessage>,
+    stream: bool,
+    options: OllamaOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OllamaChatMessage {
+    role: String, // "system", "user", or "assistant"
+    content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct OllamaOptions {
     temperature: f32,
     num_predict: u32,
@@ -64,6 +78,18 @@ struct OllamaOptions {
 #[derive(Debug, Serialize, Deserialize)]
 struct OllamaResponse {
     response: String,
+    done: bool,
+    prompt_eval_count: Option<u32>,
+    eval_count: Option<u32>,
+    total_duration: Option<u64>,
+    load_duration: Option<u64>,
+    prompt_eval_duration: Option<u64>,
+    eval_duration: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OllamaChatResponse {
+    message: OllamaChatMessage,
     done: bool,
     prompt_eval_count: Option<u32>,
     eval_count: Option<u32>,
@@ -584,6 +610,194 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
                     }
                     
                     break;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// Parse conversation history string into structured messages
+fn parse_conversation_to_messages(conversation_history: &str) -> Vec<OllamaChatMessage> {
+    let mut messages = Vec::new();
+    
+    for line in conversation_history.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        
+        if let Some(user_content) = line.strip_prefix("User: ") {
+            messages.push(OllamaChatMessage {
+                role: "user".to_string(),
+                content: user_content.to_string(),
+            });
+        } else if let Some(ai_content) = line.strip_prefix("AI: ") {
+            messages.push(OllamaChatMessage {
+                role: "assistant".to_string(),
+                content: ai_content.to_string(),
+            });
+        }
+    }
+    
+    messages
+}
+
+// Truncate messages to fit within context window, preserving message boundaries
+fn truncate_messages_for_context(messages: &[OllamaChatMessage], new_prompt: &str, max_tokens: u32) -> (Vec<OllamaChatMessage>, bool) {
+    let reserve_tokens = 512; // Reserve tokens for response
+    let available_tokens = max_tokens.saturating_sub(reserve_tokens);
+    
+    // Estimate tokens for new prompt
+    let new_prompt_tokens = estimate_tokens(new_prompt);
+    let mut used_tokens = new_prompt_tokens;
+    
+    let mut result_messages = Vec::new();
+    let mut was_truncated = false;
+    
+    // Add messages from most recent to oldest, respecting token limits
+    for message in messages.iter().rev() {
+        let message_tokens = estimate_tokens(&message.content);
+        
+        if used_tokens + message_tokens > available_tokens {
+            was_truncated = true;
+            break;
+        }
+        
+        used_tokens += message_tokens;
+        result_messages.insert(0, (*message).clone());
+    }
+    
+    (result_messages, was_truncated)
+}
+
+#[tauri::command]
+pub async fn query_ollama_chat_streaming(app: AppHandle, model: String, prompt: String, messages: Vec<crate::commands::chat_history::ChatMessage>) -> Result<(), String> {
+    let client = Client::new();
+    
+    // Convert ChatMessage to OllamaChatMessage format
+    let mut ollama_messages: Vec<OllamaChatMessage> = messages.into_iter().map(|msg| {
+        OllamaChatMessage {
+            role: if msg.is_user { "user".to_string() } else { "assistant".to_string() },
+            content: msg.content,
+        }
+    }).collect();
+    
+    println!("Received {} messages from frontend", ollama_messages.len());
+    for (i, msg) in ollama_messages.iter().enumerate() {
+        println!("Message {}: {} - {}", i, msg.role, msg.content);
+    }
+    
+    // Apply context window truncation at message level  
+    let (truncated_messages, was_truncated) = truncate_messages_for_context(&ollama_messages, &prompt, 16384);
+    ollama_messages = truncated_messages;
+    
+    // Note: Don't add the user prompt again since it's already included in the messages array
+    
+    println!("Final messages being sent to Ollama ({} total):", ollama_messages.len());
+    for (i, msg) in ollama_messages.iter().enumerate() {
+        println!("  {}: {} - {}", i, msg.role, msg.content);
+    }
+    
+    // Emit context truncation warning if needed
+    if was_truncated {
+        let _ = app.emit("context_truncated", serde_json::json!({
+            "message": "Context window full - older messages have been forgotten to make room for new conversation."
+        }));
+    }
+    
+    let ollama_request = OllamaChatRequest {
+        model: model.clone(),
+        messages: ollama_messages.clone(),
+        stream: true,
+        options: OllamaOptions {
+            temperature: 0.7,
+            num_predict: 16384,
+        },
+    };
+    
+    let url = "http://localhost:11434/api/chat";
+    
+    // Calculate initial context usage
+    let total_content: String = ollama_messages.iter()
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let estimated_tokens = estimate_tokens(&total_content);
+    
+    let initial_usage = ContextUsage {
+        used_tokens: estimated_tokens,
+        max_tokens: 16384,
+        percentage: (estimated_tokens as f32 / 16384.0) * 100.0,
+        prompt_tokens: estimated_tokens,
+        response_tokens: 0,
+    };
+    
+    let _ = app.emit("context_usage", &initial_usage);
+    
+    // Emit initial streaming event
+    let _ = app.emit("ollama_stream", serde_json::json!({
+        "content": "",
+        "done": false
+    }));
+    
+    let mut response = client.post(url)
+        .json(&ollama_request)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to Ollama: {}. Make sure Ollama is running.", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Ollama returned error: {}. Try running 'ollama pull {}' first.", response.status(), model));
+    }
+    
+    let mut accumulated_response = String::new();
+    let mut response_tokens = 0u32;
+    
+    // Process streaming response
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Error reading response: {}", e))? {
+        let chunk_str = String::from_utf8_lossy(&chunk);
+        
+        for line in chunk_str.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            
+            match serde_json::from_str::<OllamaChatResponse>(line) {
+                Ok(ollama_response) => {
+                    if !ollama_response.message.content.is_empty() {
+                        accumulated_response.push_str(&ollama_response.message.content);
+                        response_tokens += 1; // Rough estimation
+                        
+                        let _ = app.emit("ollama_stream", serde_json::json!({
+                            "content": accumulated_response,
+                            "done": false
+                        }));
+                    }
+                    
+                    if ollama_response.done {
+                        let _ = app.emit("ollama_stream", serde_json::json!({
+                            "content": accumulated_response,
+                            "done": true
+                        }));
+                        
+                        // Emit final context usage
+                        let final_usage = ContextUsage {
+                            used_tokens: estimated_tokens + response_tokens,
+                            max_tokens: 16384,
+                            percentage: ((estimated_tokens + response_tokens) as f32 / 16384.0) * 100.0,
+                            prompt_tokens: estimated_tokens,
+                            response_tokens,
+                        };
+                        
+                        let _ = app.emit("context_usage", &final_usage);
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Skip malformed JSON lines
+                    continue;
                 }
             }
         }

@@ -57,3 +57,8 @@ pub struct LlmResponse {
     pub processing_time_ms: u64,
     pub tokens_used: Option<u32>,
 }
+
+pub fn get_current_time() -> String {
+    use js_sys::Date;
+    Date::new_0().to_iso_string().as_string().unwrap_or_else(|| "Unknown".to_string())
+}

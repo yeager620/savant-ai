@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use pulldown_cmark::{Parser, html};
 use gloo_timers::future::TimeoutFuture;
+use web_sys::console;
+use crate::utils::get_current_time;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChatMessage {
@@ -16,7 +18,7 @@ struct ChatMessage {
 struct OllamaArgs {
     model: String,
     prompt: String,
-    conversation_history: Option<String>,
+    messages: Vec<ChatMessage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +52,36 @@ pub fn MinimalChat() -> impl IntoView {
     });
     let (context_warning, set_context_warning) = signal(Option::<String>::None);
     
+    // Load chat history on component mount
+    let set_messages_clone = set_messages.clone();
+    spawn_local(async move {
+        match load_chat_history().await {
+            Ok(loaded_messages) => {
+                console::log_1(&format!("Loaded {} chat messages from history", loaded_messages.len()).into());
+                set_messages_clone.set(loaded_messages);
+            },
+            Err(e) => {
+                console::log_1(&format!("Failed to load chat history: {}", e).into());
+            }
+        }
+    });
+    
+    // Setup streaming event listener once on component mount
+    let set_streaming_content_listener = set_streaming_content.clone();
+    let set_is_streaming_listener = set_is_streaming.clone();
+    let set_messages_listener = set_messages.clone();
+    let set_context_usage_listener = set_context_usage.clone();
+    let set_context_warning_listener = set_context_warning.clone();
+    
+    spawn_local(async move {
+        setup_streaming_listener(
+            set_streaming_content_listener,
+            set_is_streaming_listener,
+            set_messages_listener,
+            set_context_usage_listener,
+            set_context_warning_listener,
+        ).await;
+    });
 
     let send_message = move |_: web_sys::MouseEvent| {
         let text = input_text.get().trim().to_string();
@@ -64,33 +96,31 @@ pub fn MinimalChat() -> impl IntoView {
             timestamp: get_current_time(),
         };
         
-        set_messages.update(|msgs| msgs.push(user_message));
+        // Clone user message for history before it's moved
+        let user_message_for_history = user_message.clone();
+        
+        set_messages.update(|msgs| {
+            msgs.push(user_message);
+            // Save chat history after adding user message
+            let messages_to_save = msgs.clone();
+            spawn_local(async move {
+                if let Err(e) = save_chat_history(&messages_to_save).await {
+                    console::log_1(&format!("Failed to save chat history after user message: {}", e).into());
+                }
+            });
+        });
         set_input_text.set(String::new());
         set_is_streaming.set(true);
         set_streaming_content.set(String::new());
 
-        // Build conversation history
-        let conversation_history = build_conversation_history(&messages.get());
-        
-        // Setup streaming event listener
-        let set_streaming_content_clone = set_streaming_content.clone();
-        let set_is_streaming_clone = set_is_streaming.clone();
-        let set_messages_clone = set_messages.clone();
-        let set_context_usage_clone = set_context_usage.clone();
-        let set_context_warning_clone = set_context_warning.clone();
+        // Build conversation messages including the new user message
+        let current_messages = messages.get();
+        let mut all_messages = current_messages;
+        all_messages.push(user_message_for_history);
         
         spawn_local(async move {
-            // Setup event listener for streaming
-            setup_streaming_listener(
-                set_streaming_content_clone,
-                set_is_streaming_clone,
-                set_messages_clone,
-                set_context_usage_clone,
-                set_context_warning_clone,
-            ).await;
-            
             // Start streaming request
-            match send_to_ollama_streaming(text, conversation_history).await {
+            match send_to_ollama_streaming(text, all_messages).await {
                 Ok(_) => {
                     // Streaming started successfully - UI already set up
                 }
@@ -121,33 +151,31 @@ pub fn MinimalChat() -> impl IntoView {
                     timestamp: get_current_time(),
                 };
                 
-                set_messages.update(|msgs| msgs.push(user_message));
+                // Clone user message for history before it's moved
+                let user_message_for_history = user_message.clone();
+                
+                set_messages.update(|msgs| {
+                    msgs.push(user_message);
+                    // Save chat history after adding user message
+                    let messages_to_save = msgs.clone();
+                    spawn_local(async move {
+                        if let Err(e) = save_chat_history(&messages_to_save).await {
+                            console::log_1(&format!("Failed to save chat history after user message: {}", e).into());
+                        }
+                    });
+                });
                 set_input_text.set(String::new());
                 set_is_streaming.set(true);
                 set_streaming_content.set(String::new());
 
-                // Build conversation history
-                let conversation_history = build_conversation_history(&messages.get());
-                
-                // Setup streaming event listener
-                let set_streaming_content_clone = set_streaming_content.clone();
-                let set_is_streaming_clone = set_is_streaming.clone();
-                let set_messages_clone = set_messages.clone();
-                let set_context_usage_clone = set_context_usage.clone();
-                let set_context_warning_clone = set_context_warning.clone();
+                // Build conversation messages including the new user message
+                let current_messages = messages.get();
+                let mut all_messages = current_messages;
+                all_messages.push(user_message_for_history);
                 
                 spawn_local(async move {
-                    // Setup event listener for streaming
-                    setup_streaming_listener(
-                        set_streaming_content_clone,
-                        set_is_streaming_clone,
-                        set_messages_clone,
-                        set_context_usage_clone,
-                        set_context_warning_clone,
-                    ).await;
-                    
                     // Start streaming request
-                    match send_to_ollama_streaming(text, conversation_history).await {
+                    match send_to_ollama_streaming(text, all_messages).await {
                         Ok(_) => {
                             // Streaming started successfully - UI already set up
                         }
@@ -167,11 +195,36 @@ pub fn MinimalChat() -> impl IntoView {
         }
     };
 
+    let clear_history = move |_: web_sys::MouseEvent| {
+        if !is_streaming.get() {
+            let set_messages_clone = set_messages.clone();
+            spawn_local(async move {
+                match clear_chat_history().await {
+                    Ok(_) => {
+                        set_messages_clone.set(Vec::new());
+                        console::log_1(&"Chat history cleared successfully".into());
+                    },
+                    Err(e) => {
+                        console::log_1(&format!("Failed to clear chat history: {}", e).into());
+                    }
+                }
+            });
+        }
+    };
+
     view! {
         <div class="minimal-chat">
             <div class="chat-header">
                 <h3>"Savant AI"</h3>
                 <div class="header-right">
+                    <button 
+                        class="clear-button"
+                        title="Clear chat history"
+                        on:click=clear_history
+                        disabled=move || is_streaming.get() || messages.get().is_empty()
+                    >
+                        "🗑"
+                    </button>
                     <div class="context-usage">
                         <span class="context-text">
                             {move || {
@@ -262,27 +315,40 @@ pub fn MinimalChat() -> impl IntoView {
     }
 }
 
-fn build_conversation_history(messages: &[ChatMessage]) -> String {
-    messages.iter()
-        .map(|msg| {
-            let role = if msg.is_user { "User" } else { "AI" };
-            format!("{}: {}", role, msg.content)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+
+async fn load_chat_history() -> Result<Vec<ChatMessage>, String> {
+    let result = invoke("load_chat_history", serde_wasm_bindgen::to_value(&()).unwrap()).await;
+    serde_wasm_bindgen::from_value::<Vec<ChatMessage>>(result)
+        .map_err(|e| format!("Failed to load chat history: {}", e))
 }
 
-async fn send_to_ollama_streaming(prompt: String, conversation_history: String) -> Result<(), String> {
+async fn save_chat_history(messages: &[ChatMessage]) -> Result<(), String> {
+    let args_value = serde_wasm_bindgen::to_value(messages)
+        .map_err(|e| format!("Serialization error: {}", e))?;
+    
+    let result = invoke("save_chat_history", args_value).await;
+    serde_wasm_bindgen::from_value::<()>(result)
+        .map_err(|e| format!("Failed to save chat history: {}", e))
+}
+
+async fn clear_chat_history() -> Result<(), String> {
+    let result = invoke("clear_chat_history", serde_wasm_bindgen::to_value(&()).unwrap()).await;
+    serde_wasm_bindgen::from_value::<()>(result)
+        .map_err(|e| format!("Failed to clear chat history: {}", e))
+}
+
+async fn send_to_ollama_streaming(prompt: String, messages: Vec<ChatMessage>) -> Result<(), String> {
     let args = OllamaArgs {
         model: "devstral".to_string(),
         prompt,
-        conversation_history: Some(conversation_history),
+        messages,
     };
     
     let args_value = serde_wasm_bindgen::to_value(&args)
         .map_err(|e| format!("Serialization error: {}", e))?;
     
-    let result = invoke("query_ollama_streaming_simple", args_value).await;
+    // Use the new chat API instead of the old generate API
+    let result = invoke("query_ollama_chat_streaming", args_value).await;
     serde_wasm_bindgen::from_value::<()>(result)
         .map_err(|e| format!("Streaming error: {}", e))?;
     
@@ -314,7 +380,16 @@ async fn setup_streaming_listener(
                                 is_user: false,
                                 timestamp: get_current_time(),
                             };
-                            set_messages.update(|msgs| msgs.push(ai_message));
+                            set_messages.update(|msgs| {
+                                msgs.push(ai_message);
+                                // Save chat history after adding the AI response
+                                let messages_to_save = msgs.clone();
+                                spawn_local(async move {
+                                    if let Err(e) = save_chat_history(&messages_to_save).await {
+                                        console::log_1(&format!("Failed to save chat history: {}", e).into());
+                                    }
+                                });
+                            });
                             set_is_streaming.set(false);
                             set_streaming_content.set(String::new());
                         } else {
@@ -372,10 +447,3 @@ fn render_markdown(content: &str) -> String {
     html_output
 }
 
-fn get_current_time() -> String {
-    let date = js_sys::Date::new_0();
-    format!("{:02}:{:02}", 
-        date.get_hours() as u32, 
-        date.get_minutes() as u32
-    )
-}
