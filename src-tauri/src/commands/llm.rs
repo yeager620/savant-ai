@@ -479,7 +479,7 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
         if history.trim().is_empty() {
             (String::new(), false)
         } else {
-            truncate_conversation_for_context(history, &prompt, 4096)
+            truncate_conversation_for_context(history, &prompt, 16384)
         }
     } else {
         (String::new(), false)
@@ -505,7 +505,7 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
         stream: true,
         options: OllamaOptions {
             temperature: 0.7,
-            num_predict: 4096,
+            num_predict: 16384,
         },
     };
     
@@ -516,8 +516,8 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
     
     let initial_usage = ContextUsage {
         used_tokens: estimated_prompt_tokens,
-        max_tokens: 4096,
-        percentage: (estimated_prompt_tokens as f32 / 4096.0) * 100.0,
+        max_tokens: 16384,
+        percentage: (estimated_prompt_tokens as f32 / 16384.0) * 100.0,
         prompt_tokens: estimated_prompt_tokens,
         response_tokens: 0,
     };
@@ -568,8 +568,8 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
                     
                     let final_usage = ContextUsage {
                         used_tokens: total_tokens,
-                        max_tokens: 4096,
-                        percentage: (total_tokens as f32 / 4096.0) * 100.0,
+                        max_tokens: 16384,
+                        percentage: (total_tokens as f32 / 16384.0) * 100.0,
                         prompt_tokens,
                         response_tokens,
                     };
@@ -594,7 +594,7 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
 
 #[tauri::command]
 pub async fn calculate_context_usage_command(conversation_history: String) -> Result<ContextUsage, String> {
-    let usage = calculate_context_usage_estimate(&conversation_history, 4096);
+    let usage = calculate_context_usage_estimate(&conversation_history, 16384);
     Ok(usage)
 }
 
@@ -608,7 +608,7 @@ pub async fn query_ollama_simple(model: String, prompt: String) -> Result<String
         stream: false,
         options: OllamaOptions {
             temperature: 0.7,
-            num_predict: 4096,
+            num_predict: 16384,
         },
     };
     

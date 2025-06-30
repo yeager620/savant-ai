@@ -43,7 +43,7 @@ pub fn MinimalChat() -> impl IntoView {
     let (is_streaming, set_is_streaming) = signal(false);
     let (context_usage, set_context_usage) = signal(ContextUsage { 
         used_tokens: 0, 
-        max_tokens: 4096, 
+        max_tokens: 16384, 
         percentage: 0.0,
         prompt_tokens: 0,
         response_tokens: 0,
