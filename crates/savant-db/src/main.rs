@@ -296,17 +296,17 @@ async fn main() -> Result<()> {
                         }
                     }
                     
-                    println!("🔍 Similarity: {:.3} | Speaker: {} | Time: {}", 
+                    println!("Similarity: {:.3} | Speaker: {} | Time: {}", 
                              result.similarity_score,
                              result.speaker_id.unwrap_or_else(|| "Unknown".to_string()),
                              result.timestamp.format("%Y-%m-%d %H:%M:%S"));
                     println!("📝 Text: {}", result.text);
                     
                     if let Some(context) = result.context_before {
-                        println!("⬆️  Context: {}", context);
+                        println!("Context: {}", context);
                     }
                     if let Some(context) = result.context_after {
-                        println!("⬇️  Context: {}", context);
+                        println!("Context: {}", context);
                     }
                     
                     println!("{}", "─".repeat(80));
@@ -317,13 +317,13 @@ async fn main() -> Result<()> {
         Commands::Analyze { conversation_id } => {
             let analysis = db.analyze_conversation(&conversation_id).await?;
             
-            println!("📊 Conversation Analysis: {}", conversation_id);
+            println!("Conversation Analysis: {}", conversation_id);
             println!("{}", "═".repeat(60));
             println!("📝 Summary: {}", analysis.summary);
-            println!("⏱️  Duration: {:.1} seconds", analysis.duration);
-            println!("👥 Participants: {}", analysis.participant_count);
-            println!("🎯 Quality Score: {:.2}", analysis.quality_score);
-            println!("💭 Sentiment: {:.2} ({})", 
+            println!("Duration: {:.1} seconds", analysis.duration);
+            println!("Participants: {}", analysis.participant_count);
+            println!("Quality Score: {:.2}", analysis.quality_score);
+            println!("Sentiment: {:.2} ({})", 
                      analysis.sentiment_score,
                      if analysis.sentiment_score > 0.1 { "Positive" } 
                      else if analysis.sentiment_score < -0.1 { "Negative" } 
@@ -374,7 +374,7 @@ async fn main() -> Result<()> {
                 SpeakerCommands::Show { speaker_id } => {
                     let speakers = db.list_speakers().await?;
                     if let Some(speaker) = speakers.iter().find(|s| s.id == speaker_id) {
-                        println!("👤 Speaker Details");
+                        println!("Speaker Details");
                         println!("{}", "═".repeat(40));
                         println!("ID: {}", speaker.id);
                         println!("Name: {}", speaker.display_name.as_ref().or(speaker.name.as_ref()).unwrap_or(&"Unknown".to_string()));
@@ -396,7 +396,7 @@ async fn main() -> Result<()> {
                     if duplicates.is_empty() {
                         println!("No potential duplicates found");
                     } else {
-                        println!("🔍 Potential Speaker Duplicates");
+                        println!("Potential Speaker Duplicates");
                         println!("{}", "═".repeat(60));
                         
                         for (speaker_a, speaker_b, similarity) in duplicates {
@@ -410,7 +410,7 @@ async fn main() -> Result<()> {
                 
                 SpeakerCommands::Merge { primary, secondary } => {
                     db.merge_speakers(&primary, &secondary).await?;
-                    println!("✅ Merged speaker {} into {}", secondary, primary);
+                    println!("Merged speaker {} into {}", secondary, primary);
                 }
             }
         }
@@ -423,7 +423,7 @@ async fn main() -> Result<()> {
                     if topics.is_empty() {
                         println!("No topics found for conversation: {}", conversation_id);
                     } else {
-                        println!("🏷️  Topics for conversation: {}", conversation_id);
+                        println!("Topics for conversation: {}", conversation_id);
                         println!("{}", "═".repeat(50));
                         
                         for topic in topics {
@@ -442,7 +442,7 @@ async fn main() -> Result<()> {
                         if topics.is_empty() {
                             println!("No topics extracted for conversation: {}", conversation_id);
                         } else {
-                            println!("🏷️  Extracted topics for conversation: {}", conversation_id);
+                            println!("Extracted topics for conversation: {}", conversation_id);
                             println!("{}", "═".repeat(50));
                             
                             for topic in topics {

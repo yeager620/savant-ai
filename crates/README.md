@@ -15,7 +15,7 @@ Common data structures and utilities used across all Savant AI components.
 use savant_core::{ChatMessage, LlmRequest, LlmResponse};
 ```
 
-### **savant-llm** - LLM Inference CLI Tool ✅
+### **savant-llm** - LLM Inference CLI Tool
 Standalone command-line tool for Large Language Model inference.
 
 **Purpose**: Handle AI model communication (Ollama, OpenAI, DeepSeek, Anthropic)  

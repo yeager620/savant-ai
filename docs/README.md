@@ -2,7 +2,7 @@
 
 Comprehensive documentation for the intelligent conversation storage and analysis system.
 
-## 📁 Documentation Structure
+## Documentation Structure
 
 ### Core Systems
 - **[Database System](database.md)** - Advanced SQLite storage with speaker identification and semantic search
@@ -22,7 +22,7 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 - **[Cleanup Candidates](development/CLEANUP_CANDIDATES.md)** - Legacy code removal and optimization
 - **[Deprecations](deprecations.md)** - Deprecated features and migration paths
 
-## 🚀 Quick Navigation
+## Quick Navigation
 
 - **New to Savant AI?** Start with [Getting Started](user-guides/GETTING_STARTED.md)
 - **Setting up audio?** See [System Audio Setup](user-guides/SYSTEM_AUDIO_SETUP.md)
@@ -30,9 +30,9 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 - **CLI usage?** Review [CLI Tools Guide](cli-tools.md)
 - **Architecture deep-dive?** Read [Smart Database Pipeline](smart-database-pipeline.md)
 
-## 📋 Current System Capabilities
+## Current System Capabilities
 
-### 🎯 Core Features
+### Core Features
 - **Speaker Identification**: Text-pattern and voice biometric framework
 - **Conversation Analytics**: Automatic topic extraction, sentiment analysis
 - **Semantic Search**: Full-text and similarity-based conversation search
@@ -40,7 +40,7 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 - **Real-time Processing**: <5 second latency for speaker identification
 - **UNIX Philosophy**: Composable CLI tools for complex workflows
 
-### 🗄️ Database Architecture
+### Database Architecture
 ```mermaid
 graph TB
     subgraph "Storage Layer"
@@ -71,7 +71,7 @@ graph TB
     REL --> MCP
 ```
 
-## 🔧 Common Workflows
+## Common Workflows
 
 ### Audio Capture & Storage
 ```bash
@@ -122,7 +122,7 @@ savant-db list --limit 50 | jq -r '.[].id' | while read conv_id; do
 done
 ```
 
-## 📊 Data Management
+## Data Management
 
 ### Storage Locations
 - **Database**: `~/.config/savant-ai/transcripts.db` - SQLite with time-series optimization
@@ -136,7 +136,7 @@ done
 - **Full-Text Search**: SQLite FTS5 for content queries
 - **Caching**: Multi-level caching for hot data and speaker embeddings
 
-## 🧠 Architecture Principles
+## Architecture Principles
 
 ### UNIX Philosophy Implementation
 - **Single Purpose**: Each tool does one thing well (`savant-transcribe`, `savant-db`, `savant-llm`)
@@ -156,27 +156,27 @@ done
 - **Context Awareness**: Calendar integration and location context
 - **Relationship Analytics**: Track interaction patterns and communication frequency
 
-## 🚧 Current Implementation Status
+## Current Implementation Status
 
-### ✅ Completed
+### Completed
 - **Database Schema**: Enhanced with speaker identification and analytics
 - **CLI Tools**: Comprehensive speaker management and semantic search
 - **Speaker Identification**: Text-pattern based with ML framework ready
 - **Conversation Analytics**: Topic extraction, sentiment analysis, relationship tracking
 - **Documentation**: Complete system documentation with examples
 
-### 🔄 In Progress
+### In Progress
 - **MCP Server**: Model Context Protocol integration for LLM queries (foundation ready)
 - **Vector Embeddings**: Sentence transformer integration for semantic search
 - **Voice Biometrics**: PyAnnote-audio integration for voice identification
 
-### 📋 Planned
+### Planned
 - **TimescaleDB**: Time-series optimization for large-scale deployments
 - **Distributed Architecture**: Multi-device synchronization
 - **Advanced ML**: Speaker diarization and voice profile learning
 - **API Server**: REST API for external integrations
 
-## 🆘 Support & Development
+## Support & Development
 
 ### Common Tasks
 ```bash

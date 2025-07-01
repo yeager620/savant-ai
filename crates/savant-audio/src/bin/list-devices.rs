@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
 
     // Show input devices
     if !input_devices.is_empty() {
-        println!("🎤 INPUT DEVICES (Microphones):");
+        println!("INPUT DEVICES (Microphones):");
         println!("================================");
         for (i, device) in input_devices.iter().enumerate() {
             let default_marker = if device.is_default { " [DEFAULT]" } else { "" };
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
     // Show output devices  
     if !output_devices.is_empty() {
-        println!("🔊 OUTPUT DEVICES (Speakers/Headphones):");
+        println!("OUTPUT DEVICES (Speakers/Headphones):");
         println!("========================================");
         for (i, device) in output_devices.iter().enumerate() {
             let default_marker = if device.is_default { " [DEFAULT]" } else { "" };
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
                 || name_lower.contains("loopback") 
                 || name_lower.contains("soundflower")
                 || name_lower.contains("virtual") {
-                println!("   🎯 SYSTEM AUDIO CAPABLE (Loopback Device)");
+                println!("   SYSTEM AUDIO CAPABLE (Loopback Device)");
             }
             println!();
         }
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
     // Show devices that are both input and output
     let bidirectional: Vec<_> = devices.iter().filter(|d| d.is_input && d.is_output).collect();
     if !bidirectional.is_empty() {
-        println!("🔄 BIDIRECTIONAL DEVICES (Input + Output):");
+        println!("BIDIRECTIONAL DEVICES (Input + Output):");
         println!("==========================================");
         for (i, device) in bidirectional.iter().enumerate() {
             let default_marker = if device.is_default { " [DEFAULT]" } else { "" };
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         let name = d.name.to_lowercase();
         name.contains("blackhole") || name.contains("loopback") 
     }) {
-        println!("💡 TIP: To capture system audio, install BlackHole:");
+        println!("TIP: To capture system audio, install BlackHole:");
         println!("   brew install blackhole-2ch");
         println!("   or download from: https://github.com/ExistentialAudio/BlackHole");
     }
