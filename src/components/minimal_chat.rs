@@ -37,8 +37,11 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
 
-#[component]
-pub fn MinimalChat() -> impl IntoView {
+#[component] 
+pub fn MinimalChat(
+    #[prop(optional)] on_browser_mode: Option<Box<dyn Fn() + 'static>>,
+    #[prop(optional)] on_database_mode: Option<Box<dyn Fn() + 'static>>,
+) -> impl IntoView {
     let (messages, set_messages) = signal(Vec::<ChatMessage>::new());
     let (input_text, set_input_text) = signal(String::new());
     let (streaming_content, set_streaming_content) = signal(String::new());
@@ -188,6 +191,30 @@ pub fn MinimalChat() -> impl IntoView {
             <div class="chat-header">
                 <h3>"Savant AI"</h3>
                 <div class="header-right">
+                    {on_database_mode.as_ref().map(|handler| {
+                        let handler_clone = handler.clone();
+                        view! {
+                            <button 
+                                class="browser-toggle database-toggle"
+                                title="Open Database Query Interface"
+                                on:click=move |_| (handler_clone)()
+                            >
+                                "DB"
+                            </button>
+                        }
+                    })}
+                    {on_browser_mode.as_ref().map(|handler| {
+                        let handler_clone = handler.clone();
+                        view! {
+                            <button 
+                                class="browser-toggle"
+                                title="Open Browser Assistant"
+                                on:click=move |_| (handler_clone)()
+                            >
+                                "browser"
+                            </button>
+                        }
+                    })}
                     <button 
                         class="clear-button"
                         title="Clear chat history"

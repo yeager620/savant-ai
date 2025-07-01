@@ -3,8 +3,10 @@ mod commands;
 use commands::*;
 use reqwest::Client;
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, menu::{MenuBuilder, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton}};
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -59,7 +61,16 @@ pub fn run() {
             stop_audio_daemon,
             list_captures,
             search_captures,
-            get_daemon_logs
+            get_daemon_logs,
+            // LLM database commands
+            natural_language_query,
+            start_mcp_server,
+            get_mcp_server_status,
+            test_database_connection,
+            get_database_stats,
+            search_conversations,
+            analyze_conversation,
+            list_speakers_with_stats
         ])
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
@@ -81,6 +92,14 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Initialize database
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match init_database(&app_handle).await {
+                    Ok(_) => println!("Database initialized successfully"),
+                    Err(e) => eprintln!("Failed to initialize database: {}", e),
+                }
+            });
             // Create system tray
             let show = MenuItem::with_id(app, "show", "Show Savant AI", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
@@ -285,4 +304,20 @@ async fn is_ollama_running() -> bool {
         Ok(Ok(response)) => response.status().is_success(),
         _ => false,
     }
+}
+
+/// Initialize the database and set up shared state
+async fn init_database(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize the transcript database
+    let database = Arc::new(savant_db::TranscriptDatabase::new(None).await?);
+    
+    // Create MCP server state (initially empty)
+    let mcp_server_state: MCPServerState = Arc::new(Mutex::new(None));
+    
+    // Store the database in Tauri's state management
+    app.manage(database);
+    app.manage(mcp_server_state);
+    
+    println!("Database and MCP state initialized successfully");
+    Ok(())
 }

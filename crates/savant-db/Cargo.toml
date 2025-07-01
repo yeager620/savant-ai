@@ -20,6 +20,10 @@ dirs = "5.0"
 ndarray = "0.15"
 # Regular expressions for text processing
 regex = "1.10"
+# SQL parsing for security validation
+sqlparser = "0.42"
+# Error handling
+thiserror = "1.0"
 
 [[bin]]
 name = "savant-db"

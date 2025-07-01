@@ -5,8 +5,8 @@ An invisible, seamless AI assistant with real-time system audio transcription, s
 *Only works on MacOS as of now*
 
 ## **TODO:**
-- ✅? ~~Determine behaviour and implement data pipeline from audio transcripts to smart database~~
-- Implement MCP server for chatbot to interact with smart database (foundation completed)
+- ✅ ~~Determine behaviour and implement data pipeline from audio transcripts to smart database~~
+- ✅ ~~Implement MCP server for chatbot to interact with smart database~~
 - Figure out how to replicate app functionality on non MacOS systems, i.e. Windows & Linux
 - Figure out how to containerize application and distribute; i.e. automate release cycle
 - Implement more flexible / robust chatbot API solution; allow for use on machines that can t run Ollama models locally; allow for use of different models
@@ -17,6 +17,8 @@ An invisible, seamless AI assistant with real-time system audio transcription, s
 ## Core Features
 - **Audio Transcription**: Real-time speech-to-text pipeline with background daemon monitoring all audio I/O
 - **Smart Memory**: SQLite database with speaker identification and conversation analytics
+- **Natural Language Queries**: Ask your database questions in plain English via chat interface
+- **LLM Integration**: Model Context Protocol (MCP) server for external LLM access to conversation data
 - **Speaker Recognition**: Text-pattern based identification with framework for voice biometrics
 - **Semantic Search**: Full-text and similarity-based search across all conversations
 - **Chat Assistant**: Local Ollama integration with conversation memory and automatic startup
@@ -39,18 +41,24 @@ graph TB
         STT --> Transcribe[savant-transcribe]
         Transcribe --> DB[savant-db]
         LLM[savant-llm]
+        MCP[savant-mcp-server]
     end
     
     subgraph "External Services"
         Ollama[Ollama Local LLM]
         Browser[Browser Tabs]
         Whisper[Whisper Models]
+        Claude[Claude Desktop]
+        ChatGPT[External LLMs]
     end
     
     Backend <--> Ollama
     Backend <--> Browser
-    Transcribe <--> Whisper
     Backend <--> DB
+    Transcribe <--> Whisper
+    MCP <--> DB
+    Claude <--> MCP
+    ChatGPT <--> MCP
     
     style UI fill:#4169e1
     style Transcribe fill:#00ff41
@@ -93,6 +101,10 @@ cargo run --package savant-transcribe -- --language en --duration 10
 cargo run --package savant-db -- list
 cargo run --package savant-db -- search "meeting" --limit 10
 cargo run --package savant-db -- speaker list
+
+# MCP server for external LLM integration
+cargo run --package savant-mcp -- --help
+cargo build --release && ./target/release/savant-mcp-server
 
 # Audio daemon
 ./sav start

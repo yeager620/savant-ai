@@ -1,6 +1,6 @@
 # CLI Tools Guide
 
-Savant AI provides a suite of UNIX philosophy CLI tools for composable audio transcription, LLM inference, and database management.
+Savant AI provides a suite of UNIX philosophy CLI tools for composable audio transcription, LLM inference, database management, and Model Context Protocol (MCP) server integration.
 
 ## Design Principles
 
@@ -245,6 +245,88 @@ savant-llm models --provider ollama
 savant-llm test --provider openai --auth "sk-..."
 ```
 
+## savant-mcp-server
+
+Model Context Protocol (MCP) server for external LLM integration with the conversation database.
+
+### Basic Usage
+
+```bash
+# Start MCP server with default settings
+savant-mcp-server
+
+# Start with custom database path
+savant-mcp-server --database /path/to/custom.db
+
+# Help and options
+savant-mcp-server --help
+```
+
+### Claude Desktop Integration
+
+Add to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "savant-ai": {
+      "command": "/path/to/savant-ai/target/release/savant-mcp-server",
+      "args": ["--database", "/path/to/transcripts.db"]
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+The server provides the following tools for LLM interaction:
+
+- **`query_conversations`**: Natural language database queries
+- **`get_speaker_analytics`**: Detailed speaker statistics and analysis
+- **`search_semantic`**: Semantic search across conversation content
+- **`get_database_stats`**: Overall database statistics and summaries
+- **`analyze_conversation`**: Analyze specific conversations for insights
+
+### Usage Examples with LLMs
+
+Once configured, you can ask Claude Desktop questions like:
+
+```
+# Natural language queries through MCP
+"Find all conversations with John from last week"
+"How much did Alice talk in our meeting yesterday?"
+"Search for mentions of the new project proposal"
+"Show me database statistics"
+"Analyze the conversation from this morning"
+```
+
+### MCP Resources
+
+The server exposes these resources:
+
+- **Conversations**: Individual conversation transcripts with metadata
+- **Speakers**: Speaker profiles with interaction history
+- **Database Overview**: System-wide statistics and information
+
+### Configuration Options
+
+```bash
+# Available command-line options
+savant-mcp-server \
+  --database /custom/path/transcripts.db \  # Custom database location
+  --transport stdio \                       # Transport type (stdio, http)
+  --port 8080 \                            # HTTP port (if using http transport)
+  --verbose                                # Enable verbose logging
+```
+
+### Security Features
+
+- **Read-only access**: MCP server can only read data, never modify
+- **Query validation**: All queries are validated for safety
+- **Input sanitization**: Natural language inputs are sanitized
+- **Access control**: Only approved tables and operations are allowed
+- **Audit logging**: All database access is logged
+
 ## Pipeline Examples
 
 ### Complete Audio → Database Pipeline
@@ -296,6 +378,34 @@ savant-llm "Analyze the sentiment of these conversations"
 savant-db search "project concerns" --limit 5 | \
 jq -r '.[].text' | \
 savant-llm "What are the main issues mentioned in these conversations?"
+```
+
+### MCP Integration Workflows
+
+```bash
+# Start MCP server in background for LLM access
+savant-mcp-server --database ~/.config/savant-ai/transcripts.db &
+
+# Test MCP server manually
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | savant-mcp-server
+
+# Test natural language query via MCP
+echo '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "query_conversations",
+    "arguments": {
+      "query": "Find conversations with John from last week"
+    }
+  }
+}' | savant-mcp-server
+
+# Combined pipeline: Record → Store → Query via MCP
+savant-transcribe --speaker "user" --duration 60 | \
+savant-db store --title "Meeting Notes" && \
+echo "Data stored, now queryable via MCP for external LLMs"
 ```
 
 ### Advanced Analytics Workflows

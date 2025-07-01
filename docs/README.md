@@ -8,7 +8,8 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 - **[Database System](database.md)** - Advanced SQLite storage with speaker identification and semantic search
 - **[Smart Database Pipeline](smart-database-pipeline.md)** - Complete architecture for conversation intelligence
 - **[Audio Transcription](audio-transcription.md)** - Real-time speech-to-text with speaker separation
-- **[CLI Tools Guide](cli-tools.md)** - UNIX philosophy command-line tools
+- **[CLI Tools Guide](cli-tools.md)** - UNIX philosophy command-line tools including MCP server
+- **[LLM Database Integration Plan](llm-database-integration-plan.md)** - Model Context Protocol implementation
 - **[Architecture Overview](architecture.md)** - System design and component relationships
 
 ### User Guides (`user-guides/`)
@@ -27,6 +28,7 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 - **New to Savant AI?** Start with [Getting Started](user-guides/GETTING_STARTED.md)
 - **Setting up audio?** See [System Audio Setup](user-guides/SYSTEM_AUDIO_SETUP.md)
 - **Database queries?** Check [Database System](database.md)
+- **LLM integration?** See [LLM Database Integration Plan](llm-database-integration-plan.md)
 - **CLI usage?** Review [CLI Tools Guide](cli-tools.md)
 - **Architecture deep-dive?** Read [Smart Database Pipeline](smart-database-pipeline.md)
 
@@ -35,6 +37,8 @@ Comprehensive documentation for the intelligent conversation storage and analysi
 ### Core Features
 - **Speaker Identification**: Text-pattern and voice biometric framework
 - **Conversation Analytics**: Automatic topic extraction, sentiment analysis
+- **Natural Language Queries**: Ask your database questions in plain English
+- **LLM Integration**: Model Context Protocol (MCP) server for external LLM access
 - **Semantic Search**: Full-text and similarity-based conversation search
 - **Relationship Tracking**: Speaker interaction patterns and frequency analysis
 - **Real-time Processing**: <5 second latency for speaker identification
@@ -163,10 +167,12 @@ done
 - **CLI Tools**: Comprehensive speaker management and semantic search
 - **Speaker Identification**: Text-pattern based with ML framework ready
 - **Conversation Analytics**: Topic extraction, sentiment analysis, relationship tracking
+- **MCP Server**: Complete Model Context Protocol integration for LLM queries
+- **Natural Language Interface**: Frontend UI for database queries in plain English
+- **Security Layer**: Query validation, input sanitization, and access control
 - **Documentation**: Complete system documentation with examples
 
 ### In Progress
-- **MCP Server**: Model Context Protocol integration for LLM queries (foundation ready)
 - **Vector Embeddings**: Sentence transformer integration for semantic search
 - **Voice Biometrics**: PyAnnote-audio integration for voice identification
 
@@ -189,6 +195,10 @@ savant-db stats                       # Database statistics
 cargo tauri dev                       # Full application
 cargo test --workspace               # Run all tests
 cargo run --package savant-db -- --help  # CLI help
+
+# MCP server for external LLM integration
+cargo run --package savant-mcp -- --help  # MCP server help
+cargo build --release && ./target/release/savant-mcp-server  # Production MCP server
 ```
 
 ### Troubleshooting

@@ -1,0 +1,21 @@
+[package]
+name = "savant-mcp"
+version = "0.1.0"
+edition = "2021"
+description = "MCP server for Savant AI database integration"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+savant-db = { path = "../savant-db" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+clap = { version = "4.0", features = ["derive"] }
+uuid = { version = "1.0", features = ["v4"] }
+dirs = "5.0"
+env_logger = "0.10"
+
+[[bin]]
+name = "savant-mcp-server"
+path = "src/main.rs"

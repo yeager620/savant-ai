@@ -13,13 +13,19 @@ pub use savant_stt::{TranscriptionResult, TranscriptionSegment, SessionMetadata,
 
 pub mod speaker_identification;
 pub mod semantic_search;
+pub mod security;
+pub mod natural_query;
+pub mod mcp_server;
 
 pub use speaker_identification::{Speaker, SpeakerIdentifier, SpeakerMatch, MatchMethod};
 pub use semantic_search::{SemanticSearchEngine, SearchResult, ConversationAnalysis, Topic};
+pub use security::{QuerySecurityManager, SecurityError};
+pub use natural_query::{NaturalLanguageQueryParser, QueryIntent, IntentType, QueryResult};
+pub use mcp_server::{MCPServer, MCPRequest, MCPResponse};
 
 /// Database connection manager with speaker identification and semantic search
 pub struct TranscriptDatabase {
-    pool: SqlitePool,
+    pub pool: SqlitePool,
     speaker_identifier: Option<SpeakerIdentifier>,
     semantic_engine: Option<SemanticSearchEngine>,
 }
@@ -95,6 +101,11 @@ impl TranscriptDatabase {
         
         // Run speaker identification migration
         sqlx::query(include_str!("../migrations/002_speaker_identification.sql"))
+            .execute(&self.pool)
+            .await?;
+        
+        // Run LLM integration migration
+        sqlx::query(include_str!("../migrations/003_llm_integration.sql"))
             .execute(&self.pool)
             .await?;
         

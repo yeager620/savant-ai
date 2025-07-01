@@ -3,7 +3,7 @@ use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::console;
-use crate::components::MinimalChat;
+use crate::components::{MinimalChat, NaturalQueryInterface};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserWindow {
@@ -46,6 +46,7 @@ pub struct BrowserState {
 enum AppMode {
     Chat,
     Browser,
+    Database,
 }
 
 #[wasm_bindgen]
@@ -167,7 +168,29 @@ pub fn TaskbarApp() -> impl IntoView {
     view! {
         <div class="taskbar-app">
             <Show when=move || app_mode.get() == AppMode::Chat>
-                <MinimalChat />
+                <MinimalChat 
+                    on_browser_mode=Some(Box::new(move || set_app_mode.set(AppMode::Browser)))
+                    on_database_mode=Some(Box::new(move || set_app_mode.set(AppMode::Database)))
+                />
+            </Show>
+            
+            <Show when=move || app_mode.get() == AppMode::Database>
+                <div class="database-mode">
+                    <div class="database-header">
+                        <h3>"Database Query Interface"</h3>
+                    </div>
+                    <div class="database-content">
+                        <NaturalQueryInterface />
+                    </div>
+                    <div class="database-controls">
+                        <button 
+                            class="back-btn"
+                            on:click=move |_| set_app_mode.set(AppMode::Chat)
+                        >
+                            "← Back to Chat"
+                        </button>
+                    </div>
+                </div>
             </Show>
             
             <Show when=move || app_mode.get() == AppMode::Browser>
@@ -604,6 +627,48 @@ pub fn TaskbarApp() -> impl IntoView {
 
                 .chat-input button:active {
                     transform: translateY(0);
+                }
+                
+                /* Database Mode Styles */
+                .database-mode {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    padding: 12px;
+                }
+                
+                .database-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 8px 0;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    margin-bottom: 12px;
+                }
+                
+                .database-header h3 {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #ffffff;
+                    margin: 0;
+                }
+                
+                .database-content {
+                    flex: 1;
+                    overflow: hidden;
+                }
+                
+                .database-controls {
+                    margin-top: auto;
+                    padding-top: 12px;
+                }
+                
+                .database-toggle {
+                    background: rgba(79, 70, 229, 0.8) !important;
+                }
+                
+                .database-toggle:hover {
+                    background: rgba(79, 70, 229, 1) !important;
                 }
                 
                 /* Browser Mode Styles */
