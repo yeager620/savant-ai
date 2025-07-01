@@ -49,6 +49,26 @@ pub struct TranscriptionResult {
     pub segments: Vec<TranscriptionSegment>,
     pub processing_time_ms: u64,
     pub model_used: String,
+    pub session_metadata: Option<SessionMetadata>,
+}
+
+/// Session metadata for tracking conversations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionMetadata {
+    pub session_id: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub audio_source: AudioSource,
+    pub speaker: Option<String>,
+    pub device_info: Option<String>,
+}
+
+/// Audio source type for speaker separation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AudioSource {
+    Microphone,      // User input
+    SystemAudio,     // Computer output (apps, calls, etc.)
+    BluetoothDevice(String),  // Named bluetooth device
+    Unknown,
 }
 
 /// Individual transcription segment with timing

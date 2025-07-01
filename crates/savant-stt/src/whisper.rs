@@ -199,6 +199,7 @@ impl WhisperProcessor {
             segments: processed_segments,
             processing_time_ms: processing_time,
             model_used: self.config.model_path.clone(),
+            session_metadata: None, // Will be added by the calling application
         })
     }
 }

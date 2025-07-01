@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use savant_audio::{create_audio_capture, AudioConfig, AudioBuffer, AudioBufferConfig};
-use savant_stt::{create_speech_to_text_with_config, SttConfig, markdown};
+use savant_stt::{create_speech_to_text_with_config, SttConfig, markdown, SessionMetadata, AudioSource};
 use anyhow::Result;
 use tracing_subscriber::FmtSubscriber;
 
@@ -24,9 +24,18 @@ struct Cli {
     /// Language to transcribe in (e.g., "en", "zh"). Auto-detects if not specified.
     #[arg(long)]
     language: Option<String>,
-    /// Output file (markdown). If not provided, prints to stdout
+    /// Output file. If not provided, prints to stdout
     #[arg(short, long)]
     output: Option<PathBuf>,
+    /// Output format: json or markdown
+    #[arg(long, default_value = "json")]
+    format: String,
+    /// Speaker identifier for this audio source
+    #[arg(long)]
+    speaker: Option<String>,
+    /// Session ID to group related recordings
+    #[arg(long)]
+    session_id: Option<String>,
 }
 
 #[tokio::main]
@@ -72,17 +81,32 @@ async fn main() -> Result<()> {
     let mut stt = create_speech_to_text_with_config(stt_cfg.clone())?;
     stt.load_model(&stt_cfg.model_path).await?;
 
-    let result = stt
+    let mut result = stt
         .transcribe(&audio_sample.data, audio_sample.sample_rate)
         .await?;
 
-    let markdown = markdown::format_transcription_markdown(&result, None, chrono::Utc::now());
+    // Add session metadata
+    let session_metadata = SessionMetadata {
+        session_id: cli.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        timestamp: chrono::Utc::now(),
+        audio_source: if cli.system { AudioSource::SystemAudio } else { AudioSource::Microphone },
+        speaker: cli.speaker,
+        device_info: Some(format!("savant-transcribe-{}", env!("CARGO_PKG_VERSION"))),
+    };
+    
+    result.session_metadata = Some(session_metadata);
+
+    let output_content = match cli.format.as_str() {
+        "json" => serde_json::to_string_pretty(&result)?,
+        "markdown" | "md" => markdown::format_transcription_markdown(&result, None, chrono::Utc::now()),
+        _ => return Err(anyhow::anyhow!("Unsupported format: {}", cli.format)),
+    };
 
     if let Some(path) = cli.output {
-        std::fs::write(&path, markdown)?;
+        std::fs::write(&path, output_content)?;
         println!("Saved transcript to {}", path.display());
     } else {
-        println!("{}", markdown);
+        println!("{}", output_content);
     }
 
     Ok(())

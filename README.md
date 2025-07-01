@@ -1,220 +1,131 @@
-# Savant AI - Intelligent Assistant with Browser Monitoring
+# Savant AI
 
-A stealth AI assistant that provides intelligent chat capabilities and browser monitoring to detect questions in web content and provide instant answers.
+An invisible, seamless AI assistant with real-time system audio transcription, smart long-term memory, standard chat capabilities, [ADD REST OF FEATURES HERE], and [WIP] browser monitoring.
 
-## **Core Features**
+*Only works on MacOS as of now*
 
-### **🕶️ Stealth Operation**
-- Hidden from screenshots and screen recordings  
-- System tray background operation
-- macOS-native window transparency and invisibility
-- No visible UI during normal operation
+## **TODO:**
+- Refine structure / shape of (.md file) audio transcript output
+- Determine behaviour and implement data pipeline from audio transcripts to smart database
+- Figure out how to replicate app functionality on non MacOS systems, i.e. Windows & Linux
+- Figure out how to containerize application and distribute; i.e. automate release cycle
+- Implement more flexible / robust chatbot API solution; allow for use on machines that can t run Ollama models locally; allow for use of different models
+- Implement MCP server(s) for chatbot to interact with smart database (and other outside tools)
+- Fix non-functional browser monitor module and repair / update the GUI 
 
-### **🧠 Intelligent Chat Assistant**
-- Local LLM integration via Ollama
-- Perfect conversation memory with persistent chat history
-- Real-time response streaming
-- Context-aware conversation management
+## Core features
+- ** Audio Transcription**: Real-time speech-to-text pipeline monitoring all audio I/O with smart database for long-term memory
+- ** Chat Assistant**: Local Ollama integration with conversation memory  
+- [WIP] ** Browser Monitoring**: Accessibility API-based content detection
+- ** Invisibility**: All operation should be hidden from external screen capture, screenshots, etc.
 
-### **🌐 Browser Content Monitoring**
-- Detects running Chrome/Chromium browsers using Accessibility APIs
-- Parses tab content to identify potential prompts and questions
-- Ranks prompts by relevance and active tab context
-- Seamless integration with chat assistant for answering detected questions
+## Architecture
 
-### **🤖 Multi-Provider AI Support**
-- **Ollama**: Local inference (primary provider)
-- **OpenAI**: GPT integration
-- **DeepSeek**: Cost-effective cloud inference  
-- **Anthropic**: Claude models
-
-## **How It Works**
+### Uses a set of self-contained, multi-purpose modules connected by data pipes (usually in the form of text streams) which can each also be used and standalone CLI apps
 
 ```mermaid
-graph LR
-    A[Browser Tabs] --> B[Accessibility APIs]
-    B --> C[Content Parsing]
-    C --> D[Question Detection]
-    D --> E[Prompt Ranking]
-    E --> F[Display in UI]
-    F --> G[User Selection]
-    G --> H[Local LLM]
-    H --> I[Streamed Response]
+graph TB
+    subgraph "Desktop App"
+        UI[Leptos Frontend] --> Backend[Tauri Backend]
+        Backend --> Tray[System Tray]
+    end
     
-    style D fill:#00ff41
-    style H fill:#4169e1
-    style I fill:#00ff41
+    subgraph "UNIX CLI Tools"
+        Audio[savant-audio] --> STT[savant-stt]
+        STT --> Transcribe[savant-transcribe]
+        Transcribe --> DB[savant-db]
+        LLM[savant-llm]
+    end
+    
+    subgraph "External Services"
+        Ollama[Ollama Local LLM]
+        Browser[Browser Tabs]
+        Whisper[Whisper Models]
+    end
+    
+    Backend <--> Ollama
+    Backend <--> Browser
+    Transcribe <--> Whisper
+    Backend <--> DB
+    
+    style UI fill:#4169e1
+    style Transcribe fill:#00ff41
+    style DB fill:#ff6b35
 ```
 
-## **Browser Monitoring Architecture**
+## Audio Pipeline
 
 ```mermaid
 sequenceDiagram
-    participant UI as Taskbar App
-    participant MON as Browser Monitor
-    participant ACC as Accessibility APIs
-    participant LLM as Ollama
+    participant Mic as Microphone
+    participant Sys as System Audio
+    participant Cap as Audio Capture
+    participant STT as Speech-to-Text
+    participant DB as Database
     
-    UI->>MON: Start browser monitoring
-    MON->>ACC: Scan running browsers
-    ACC-->>MON: Return browser windows
-    MON->>ACC: Get active tab content
-    ACC-->>MON: Tab text content
-    MON->>MON: Detect & rank prompts
-    MON-->>UI: Update prompt list
-    
-    Note over UI: User selects prompt
-    UI->>LLM: Send selected prompt
-    LLM-->>UI: Stream response
+    Mic->>Cap: User speech
+    Sys->>Cap: Computer audio
+    Cap->>STT: Raw audio samples
+    STT->>STT: Whisper processing
+    STT->>STT: Post-process silence
+    STT->>DB: JSON with metadata
+    DB->>DB: Store + index
 ```
 
-## **Global Hotkeys**
+## i think this is the quickest way to start rn
 
-| Shortcut | Function |
-|----------|----------|
-| `Cmd+Shift+A` | Toggle AI overlay scanning |
-| `Cmd+Shift+S` | Trigger immediate screenshot analysis |
-| `Cmd+Shift+D` | Show/hide configuration dashboard |
-
-## **Quick Start**
-
-### **Prerequisites**
 ```bash
-# Install Rust and Node.js
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-npm install -g trunk
-
-# Install local AI with Ollama
+# Install dependencies
 brew install ollama
-ollama pull devstral  # or your preferred model
-ollama serve  # Start Ollama service
-```
+ollama pull devstral && ollama serve
 
-### **Development**
-```bash
 # Clone and run
-git clone <repository-url>
+git clone <repo>
 cd savant-ai
-
-# Start development server (frontend + backend)
 cargo tauri dev
 
-# Frontend-only development  
-trunk serve  # Opens at localhost:1420
+# CLI tools
+cargo run --package savant-transcribe -- --language en --duration 10
+cargo run --package savant-db -- list
 ```
 
-### **Building**
-```bash
-# Debug build for testing
-cargo tauri build --debug
+## Project Structure
 
-# Release build for distribution
-cargo tauri build --release
+```
+savant-ai/
+├── src/                    # Leptos frontend (WASM)
+├── src-tauri/              # Tauri desktop backend
+├── crates/
+│   ├── savant-transcribe/  # Audio → JSON transcription
+│   ├── savant-db/          # Database management
+│   ├── savant-llm/         # LLM inference CLI
+│   └── savant-{audio,stt,core}/  # Supporting libraries
+└── docs/                   # Detailed documentation
 ```
 
-## **Configuration**
+## Configuration
 
-Settings stored in `~/.config/savant-ai/config.toml`:
+Settings in `~/.config/savant-ai/config.toml`:
 
 ```toml
 [ai_providers]
 default_provider = "ollama"
-ollama_endpoint = "http://localhost:11434"
-openai_api_key = ""
-deepseek_api_key = ""
 
-[stealth_settings]
-stealth_mode_enabled = true
-window_transparency = 0.9
-always_on_top = true
-
-[hotkeys]
-toggle_overlay = "CommandOrControl+Shift+A"
-screenshot_analyze = "CommandOrControl+Shift+S" 
-show_dashboard = "CommandOrControl+Shift+D"
+[transcription]
+default_language = "en"
+auto_speaker_detection = true
 ```
 
-## **Technical Architecture**
+## Documentation
 
-### **Frontend (Leptos 0.7 WASM)**
-```
-src/
-├── taskbar_app.rs           # Main minimalistic sidebar UI
-├── components/
-│   └── minimal_chat.rs      # Chat interface with browser toggle
-└── utils/                   # Frontend utilities
-```
+- **[Architecture & Setup](docs/architecture.md)** - Detailed system design
+- **[CLI Tools Guide](docs/cli-tools.md)** - UNIX tool usage patterns  
+- **[Audio Transcription](docs/audio-transcription.md)** - Recording and processing
+- **[Database System](docs/database.md)** - Storage and querying
+- **[Deprecations](docs/deprecations.md)** - Cleanup and migration guide
 
-### **Backend (Tauri 2.0 Rust)**
-```
-src-tauri/src/commands/
-├── llm.rs                   # Multi-provider AI integration
-├── chat_history.rs          # Persistent conversation storage
-├── browser.rs               # Browser monitoring via Accessibility APIs
-├── system.rs                # Stealth window management
-├── hotkey.rs                # Global keyboard shortcuts
-└── config.rs                # Configuration management
-```
+## Status
 
-### **Key Components**
-
-#### **Browser Monitoring** (`browser.rs`)
-```rust
-#[tauri::command]
-pub async fn start_browser_monitoring(app: AppHandle) -> Result<(), String> {
-    // Use macOS Accessibility APIs to scan browser windows
-    let windows = scan_browser_windows().await?;
-    
-    // Detect prompts in active tab content
-    let prompts = detect_prompts_in_content(&content).await?;
-    
-    // Emit to frontend for user selection
-    let _ = app.emit("browser_state_update", &browser_state);
-    Ok(())
-}
-```
-
-#### **Chat History System** (`chat_history.rs`)
-```rust
-#[tauri::command]
-pub async fn save_chat_history(messages: Vec<ChatMessage>) -> Result<(), String> {
-    let history_path = get_chat_history_path()?;
-    let json = serde_json::to_string_pretty(&messages)?;
-    fs::write(&history_path, json)?;
-    Ok(())
-}
-```
-
-#### **Stealth System** (`system.rs`)
-```rust
-#[tauri::command]
-pub async fn enable_stealth_mode(_window: Window) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        // Hide window from screenshots using setSharingType: 0
-        // NSWindowSharingNone prevents screen capture
-    }
-    Ok(())
-}
-```
-
-## **Current Status** ✅
-
-### **Fully Implemented**
-- ✅ **Core Architecture**: Tauri 2.0 + Leptos 0.7 foundation
-- ✅ **Chat Assistant**: Perfect conversation memory with Ollama integration
-- ✅ **Browser Monitoring**: Accessibility API-based content detection
-- ✅ **Stealth Features**: Screenshot invisibility and system tray operation
-- ✅ **Minimalistic UI**: Clean sidebar interface with browser toggle
-
-### **Browser Monitoring Features**
-- ✅ **Cross-browser Support**: Detects Chrome, Chromium, Edge, Arc
-- ✅ **Content Parsing**: Extracts text from active browser tabs
-- ✅ **Question Detection**: Identifies potential prompts using pattern matching
-- ✅ **Real-time Updates**: Monitors tab switching and content changes
-- ✅ **Integration**: Seamless handoff from browser detection to chat assistant
-
-### **Next Steps** 🔄
-- [ ] **Permission Handling**: Improve macOS Accessibility permission detection
-- [ ] **Performance Optimization**: Optimize browser content scanning frequency
-- [ ] **Enhanced Detection**: Improve prompt detection accuracy and relevance scoring
+**✅ Working**: Audio transcription, chat assistant, browser monitoring, CLI tools  
+**🔄 In Progress**: Database integration, frontend optimization  
+**📋 Planned**: Voice profiles, real-time streaming, advanced analytics

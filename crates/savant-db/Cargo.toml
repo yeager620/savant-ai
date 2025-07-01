@@ -1,0 +1,22 @@
+[package]
+name = "savant-db"
+version = "0.1.0"
+edition = "2021"
+description = "Database management for Savant AI transcription data"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+savant-stt = { path = "../savant-stt" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+clap = { version = "4.0", features = ["derive"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+dirs = "5.0"
+
+[[bin]]
+name = "savant-db"
+path = "src/main.rs"
