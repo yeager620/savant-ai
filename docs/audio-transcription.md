@@ -378,6 +378,51 @@ savant-transcribe --duration 30 | jq '.processing_time_ms'
 savant-transcribe --duration 30 | jq '.segments[].confidence'
 ```
 
+## Background Daemon
+
+### Automated Audio Capture
+
+The system includes a background daemon for continuous audio monitoring:
+
+```bash
+# Start background daemon
+./scripts/audio/savant-audio-control.sh start
+
+# Check daemon status
+./scripts/audio/savant-audio-control.sh status
+
+# View live logs
+./scripts/audio/savant-audio-control.sh logs
+
+# Search captured content
+./scripts/audio/savant-audio-control.sh search "meeting"
+
+# Stop daemon
+./scripts/audio/savant-audio-control.sh stop
+```
+
+### Single-Instance Protection
+
+The daemon uses PID-based locking to prevent multiple instances:
+
+- **Automatic Detection**: Checks for existing daemon before starting
+- **Graceful Handling**: Shows clear error messages for conflicts
+- **Crash Recovery**: Automatically cleans up stale PID files
+- **Testing Interface**: Built-in test command to verify protection
+
+```bash
+# Test protection mechanism
+./scripts/audio/savant-audio-control.sh test
+```
+
+### Daemon Configuration
+
+Default settings in `scripts/audio/savant-audio-daemon.sh`:
+- **Segment Duration**: 300 seconds (5 minutes)
+- **Audio Device**: BlackHole 2ch (system audio)
+- **Output Format**: Markdown with JSON metadata
+- **Storage Location**: `~/Documents/savant-ai/data/audio-captures/`
+
 ## Integration Examples
 
 ### Database Pipeline
@@ -395,12 +440,14 @@ curl -X POST -H "Content-Type: application/json" \
      -d @- https://api.sentiment-analysis.com/analyze
 ```
 
-### Real-time Monitoring
+### Continuous Monitoring
 ```bash
-# Continuous recording (future feature)
-while true; do
-  savant-transcribe --duration 60 --speaker "user" | \
-  savant-db store --title "Continuous-$(date +%H%M)"
-  sleep 30
-done
+# Background daemon handles continuous recording
+./scripts/audio/savant-audio-control.sh start
+
+# Monitor activity
+./scripts/audio/savant-audio-control.sh logs
+
+# Search recent captures
+./scripts/audio/savant-audio-control.sh search "project update"
 ```

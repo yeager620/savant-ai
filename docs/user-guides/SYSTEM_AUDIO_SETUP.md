@@ -1,19 +1,19 @@
 # System Audio Capture Setup
 
-This document explains how to set up automated system audio capture that "eavesdrops" on all audio (input/output) at the system level while allowing normal audio usage.
+This document explains how to set up automated system audio capture that monitors all audio (input/output) at the system level while preserving normal audio usage.
 
-## 🎯 What This Does
+## What This Does
 
 - **Captures ALL system audio**: Everything that plays through speakers/headphones
 - **Captures microphone input**: All microphone usage across apps
 - **Preserves normal audio**: You still hear audio normally and can use your mic
-- **Background operation**: Runs invisibly in the background
+- **Background operation**: Runs invisibly in the background with single-instance protection
 - **Automatic transcription**: Converts all captured audio to searchable text
 - **Zero configuration**: Automated setup handles everything
 
-## 🚀 Quick Setup (Automated)
+## Quick Setup
 
-### Option 1: One-Command Setup
+### Automated Setup
 ```bash
 ./scripts/setup/auto-setup-system-audio.sh
 ```
@@ -24,28 +24,37 @@ This script automatically:
 - Sets up background capture daemon
 - Creates automatic startup service
 
-### Option 2: Manual Control
+### Manual Control
 ```bash
-# Check status
+# Check daemon status and recent activity
 ./scripts/audio/savant-audio-control.sh status
 
-# Run setup
-./scripts/audio/savant-audio-control.sh setup
-
-# Start background capture
+# Start background capture daemon
 ./scripts/audio/savant-audio-control.sh start
 
-# Stop capture
+# Stop capture daemon
 ./scripts/audio/savant-audio-control.sh stop
 
-# View live activity
+# Restart daemon
+./scripts/audio/savant-audio-control.sh restart
+
+# View live daemon logs
 ./scripts/audio/savant-audio-control.sh logs
 
-# Search transcripts
+# List all captured transcripts
+./scripts/audio/savant-audio-control.sh list
+
+# Search transcripts for specific text
 ./scripts/audio/savant-audio-control.sh search "meeting"
+
+# Test single-instance protection
+./scripts/audio/savant-audio-control.sh test
+
+# Run automated setup
+./scripts/audio/savant-audio-control.sh setup
 ```
 
-## 🔧 How It Works
+## How It Works
 
 ### Audio Routing Architecture
 ```
@@ -60,104 +69,116 @@ Microphone → Apps (normal usage)
 
 1. **BlackHole 2ch**: Virtual audio loopback device
 2. **Multi-Output Device**: Routes audio to both speakers and BlackHole
-3. **Capture Daemon**: Background service that records and transcribes
-4. **LaunchAgent**: Automatic startup service
+3. **Capture Daemon**: Background service with PID-based single-instance protection
+4. **Control Script**: Management interface for daemon operations
 
-## 📁 File Locations
+### Single-Instance Protection
+
+The daemon uses PID-based locking to ensure only one instance runs at a time:
+
+1. **PID File Check**: Verifies no existing daemon is running
+2. **Process Validation**: Confirms PID corresponds to active process
+3. **Automatic Cleanup**: Removes stale PID files from crashed instances
+4. **Signal Handling**: Proper cleanup on termination signals
+
+### What Happens with Multiple Instances
+
+When attempting to start a second daemon instance:
+- **Direct Script**: Exits with error message and existing PID
+- **Control Script**: Shows warning with current daemon PID
+- **Testing Mode**: Verifies protection is working correctly
+
+## File Locations
 
 - **Captures**: `~/Documents/savant-ai/data/audio-captures/*.md`
-- **Logs**: `~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log`
+- **Daemon Logs**: `~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log`
+- **PID File**: `~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.pid`
 - **Daemon Script**: `~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh`
-- **Service**: `~/Library/LaunchAgents/com.savant.audio.daemon.plist`
+- **Control Script**: `~/Documents/savant-ai/scripts/audio/savant-audio-control.sh`
 
-## 🎮 Daemon Management Commands
+## Daemon Management
 
-All commands should be run from the `savant-ai` project directory (`/Users/yeager/Documents/savant-ai/`):
+All commands should be run from the `savant-ai` project directory.
 
-### Start/Stop/Status Commands
+### Primary Interface (Recommended)
 ```bash
+# Check daemon status and recent activity
+./scripts/audio/savant-audio-control.sh status
+
 # Start the daemon
-launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+./scripts/audio/savant-audio-control.sh start
 
 # Stop the daemon
-launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+./scripts/audio/savant-audio-control.sh stop
 
-# Check if daemon is running (look for com.savant.audio.daemon)
-launchctl list | grep savant
+# Restart the daemon
+./scripts/audio/savant-audio-control.sh restart
 
-# Get detailed daemon status
-launchctl print gui/$(id -u)/com.savant.audio.daemon
+# Test single-instance protection
+./scripts/audio/savant-audio-control.sh test
 ```
 
-### Log Commands
+### Direct Daemon Control (Advanced)
 ```bash
-# View recent logs (last 20 lines)
-tail -20 ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
-
-# Follow logs in real-time (Ctrl+C to stop)
-tail -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
-
-# View all logs
-cat ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
-
-# View error logs
-cat ~/savant-audio-daemon.err
-
-# View stdout logs
-cat ~/savant-audio-daemon.out
-
-# Clear logs
-> ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
-```
-
-### Monitoring Commands
-```bash
-# Check capture directory
-ls -la ~/Documents/savant-ai/data/audio-captures/
-
-# Count capture files
-ls ~/Documents/savant-ai/data/audio-captures/ | wc -l
-
-# Check latest capture file
-ls -t ~/Documents/savant-ai/data/audio-captures/ | head -1
-
-# View recent capture content
-tail ~/Documents/savant-ai/data/audio-captures/$(ls -t ~/Documents/savant-ai/data/audio-captures/ | head -1)
-```
-
-### Debugging Commands
-```bash
-# Test the script manually (single run)
-bash ~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh
+# Start daemon directly (handles single-instance protection)
+./scripts/audio/savant-audio-daemon.sh
 
 # Check daemon process
 ps aux | grep savant-audio-daemon
 
+# Stop daemon by PID
+kill $(cat ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.pid)
+```
+
+### Legacy LaunchAgent Control
+```bash
+# Check if launchd service exists
+launchctl list | grep savant
+
+# Control via launchctl (if service is installed)
+launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+```
+
+### Monitoring and Logs
+```bash
+# View live logs
+./scripts/audio/savant-audio-control.sh logs
+
+# View recent log entries
+tail -20 ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
+
+# List all captures
+./scripts/audio/savant-audio-control.sh list
+
+# Search transcripts
+./scripts/audio/savant-audio-control.sh search "meeting"
+
+# Check capture directory
+ls -la ~/Documents/savant-ai/data/audio-captures/
+
+# View latest capture
+tail ~/Documents/savant-ai/data/audio-captures/$(ls -t ~/Documents/savant-ai/data/audio-captures/ | head -1)
+```
+
+### Debugging and Testing
+```bash
+# Test single-instance protection
+./scripts/audio/savant-audio-control.sh test
+
 # Check system audio devices
 ./scripts/audio/audio-devices.sh
 
-# Test cargo command directly
+# Test transcription directly
 cargo run --package savant-transcribe -- --duration 10 --system --output test.md
+
+# Manual daemon execution (for debugging)
+./scripts/audio/savant-audio-daemon.sh
 ```
 
-### Control Script (Alternative)
-```bash
-# Start daemon
-./scripts/audio/savant-audio-control.sh start
+## Usage Examples
 
-# Stop daemon  
-./scripts/audio/savant-audio-control.sh stop
-
-# Check status
-./scripts/audio/savant-audio-control.sh status
-
-# View logs
-./scripts/audio/savant-audio-control.sh logs
-```
-
-## 🎮 Usage Examples
-
-### Find Specific Content
+### Content Search
 ```bash
 # Search for meetings
 ./scripts/audio/savant-audio-control.sh search "meeting"
@@ -165,24 +186,22 @@ cargo run --package savant-transcribe -- --duration 10 --system --output test.md
 # Search for music
 ./scripts/audio/savant-audio-control.sh search "song\|music\|artist"
 
-# Search case-insensitive
+# Search for calls
 ./scripts/audio/savant-audio-control.sh search "zoom\|teams\|call"
-```
 
-### List All Captures
-```bash
+# List all captures
 ./scripts/audio/savant-audio-control.sh list
 ```
 
-## 🔍 What Gets Captured
+## What Gets Captured
 
 ### Audio Sources
-- 🎵 **Music**: Spotify, Apple Music, YouTube, SoundCloud
-- 🎬 **Videos**: Netflix, YouTube, Vimeo, streaming services
-- 💬 **Calls**: Zoom, Teams, Discord, Slack, FaceTime
-- 🎮 **Games**: All game audio and voice chat
-- 🔔 **System**: Notifications, alerts, sound effects
-- 🎙️ **Microphone**: Your voice in calls, dictation, voice commands
+- **Music**: Spotify, Apple Music, YouTube, SoundCloud
+- **Videos**: Netflix, YouTube, Vimeo, streaming services
+- **Calls**: Zoom, Teams, Discord, Slack, FaceTime
+- **Games**: All game audio and voice chat
+- **System**: Notifications, alerts, sound effects
+- **Microphone**: Your voice in calls, dictation, voice commands
 
 ### Transcript Format
 Each capture creates a timestamped markdown file:
@@ -208,14 +227,15 @@ Each capture creates a timestamped markdown file:
 "Let's review the sprint goals..."
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Capture Settings
-The daemon captures in 5-minute segments by default. Edit `~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh` to customize:
+The daemon captures in 5-minute segments by default. Edit the daemon script to customize:
 
 ```bash
+# In ~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh
 SEGMENT_DURATION=300  # 5 minutes (change as needed)
-CAPTURE_DIR="$HOME/savant-audio-captures"  # Output directory
+CAPTURE_DIR="$SAVANT_DIR/data/audio-captures"  # Output directory
 ```
 
 ### Audio Quality
@@ -224,7 +244,7 @@ CAPTURE_DIR="$HOME/savant-audio-captures"  # Output directory
 - **Format**: F32 floating point
 - **Compression**: Automatic via Whisper preprocessing
 
-## 🔒 Privacy & Security
+## Privacy and Security
 
 ### Data Handling
 - **Local Only**: All processing happens on your machine
@@ -243,7 +263,7 @@ CAPTURE_DIR="$HOME/savant-audio-captures"  # Output directory
 - Audio when daemon is stopped
 - Audio from other user accounts
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -269,18 +289,32 @@ brew install blackhole-2ch
 
 #### "Daemon won't start"
 ```bash
-# Check if daemon is loaded
-launchctl list | grep savant
+# Check daemon status
+./scripts/audio/savant-audio-control.sh status
 
 # Restart daemon
-launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
-launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
-
-# Check daemon status
-launchctl print gui/$(id -u)/com.savant.audio.daemon
-
-# Alternative restart using control script
 ./scripts/audio/savant-audio-control.sh restart
+
+# Test single-instance protection
+./scripts/audio/savant-audio-control.sh test
+
+# Check for conflicting processes
+ps aux | grep savant-audio-daemon
+```
+
+#### "Multiple instance errors"
+```bash
+# Check current daemon status
+./scripts/audio/savant-audio-control.sh status
+
+# Stop existing daemon first
+./scripts/audio/savant-audio-control.sh stop
+
+# Clean up stale PID file if needed
+rm -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.pid
+
+# Start fresh daemon
+./scripts/audio/savant-audio-control.sh start
 ```
 
 #### "No transcripts generated"
@@ -294,16 +328,14 @@ wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin 
 ### Reset Everything
 ```bash
 # Stop daemon
-launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+./scripts/audio/savant-audio-control.sh stop
 
-# Remove service
-rm ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+# Remove launchd service (if installed)
+rm -f ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 
-# Remove daemon script and logs
-rm ~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh
-rm ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
-rm ~/savant-audio-daemon.err
-rm ~/savant-audio-daemon.out
+# Clear logs
+rm -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
+rm -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.pid
 
 # Clear captures (optional)
 rm -rf ~/Documents/savant-ai/data/audio-captures/
@@ -315,7 +347,7 @@ brew uninstall blackhole-2ch
 ./scripts/setup/auto-setup-system-audio.sh
 ```
 
-## 🚨 Important Notes
+## Important Notes
 
 ### Audio Routing
 - **No Audio Loss**: You'll still hear everything normally
@@ -335,7 +367,7 @@ brew uninstall blackhole-2ch
 - **Apps**: Works with all macOS applications
 - **External**: Bluetooth headphones, USB audio interfaces
 
-## 📊 Advanced Usage
+## Advanced Usage
 
 ### Batch Processing
 Process multiple audio files:
@@ -369,27 +401,17 @@ cp ~/Documents/savant-ai/data/audio-captures/*.md ~/Dropbox/transcripts/
 mdfind "kind:text AND (meeting OR call)"
 ```
 
-## 🆘 Support
+## Support
 
 If you encounter issues:
 
 1. **Check Status**: `./scripts/audio/savant-audio-control.sh status`
 2. **View Logs**: `./scripts/audio/savant-audio-control.sh logs`
-3. **List Devices**: `./scripts/audio/audio-devices.sh`
-4. **Restart Daemon**: `./scripts/audio/savant-audio-control.sh restart`
+3. **Test Protection**: `./scripts/audio/savant-audio-control.sh test`
+4. **List Devices**: `./scripts/audio/audio-devices.sh`
+5. **Restart Daemon**: `./scripts/audio/savant-audio-control.sh restart`
 
 For persistent issues, check the daemon log file:
 ```bash
 tail -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 ```
-
-## 🔮 Future Enhancements
-
-Planned features:
-- Real-time transcription display
-- Speaker identification
-- Automatic meeting summaries
-- Calendar integration
-- Voice command triggers
-- Multi-language support
-- Custom vocabulary training

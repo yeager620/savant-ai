@@ -15,18 +15,44 @@ print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
+# Helper functions for daemon management
+is_daemon_running() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+            return 0  # Running
+        fi
+    fi
+    return 1  # Not running
+}
+
+get_daemon_pid() {
+    if [ -f "$PID_FILE" ]; then
+        cat "$PID_FILE" 2>/dev/null
+    fi
+}
+
+is_daemon_running_launchd() {
+    sudo launchctl list | grep -q "com.savant.audio.daemon" 2>/dev/null
+}
+
+# Updated paths to match the daemon script
+SAVANT_DIR="$HOME/Documents/savant-ai"
+DAEMON_SCRIPT="$SAVANT_DIR/scripts/audio/savant-audio-daemon.sh"
 DAEMON_PLIST="/Library/LaunchAgents/com.savant.audio.daemon.plist"
-CAPTURE_DIR="$HOME/savant-audio-captures"
-LOG_FILE="$HOME/savant-audio-daemon.log"
+CAPTURE_DIR="$SAVANT_DIR/data/audio-captures"
+LOG_FILE="$SAVANT_DIR/data/daemon-logs/savant-audio-daemon.log"
+PID_FILE="$SAVANT_DIR/data/daemon-logs/savant-audio-daemon.pid"
 
 show_status() {
     echo "🎵 Savant Audio System Status"
     echo "============================="
     echo ""
     
-    # Check if daemon is running
-    if sudo launchctl list | grep -q "com.savant.audio.daemon"; then
-        print_status "Audio capture daemon is RUNNING"
+    # Check if daemon is running (PID-based)
+    if is_daemon_running; then
+        local pid=$(get_daemon_pid)
+        print_status "Audio capture daemon is RUNNING (PID: $pid)"
         
         # Show recent activity
         if [[ -f "$LOG_FILE" ]]; then
@@ -34,6 +60,9 @@ show_status() {
             print_info "Recent activity (last 5 lines):"
             tail -5 "$LOG_FILE" | sed 's/^/  /'
         fi
+    elif is_daemon_running_launchd; then
+        print_status "Audio capture daemon is RUNNING (via launchd)"
+        print_info "Use 'launchctl' commands to manage this instance"
     else
         print_warning "Audio capture daemon is STOPPED"
     fi
@@ -70,43 +99,96 @@ show_status() {
 start_daemon() {
     echo "🚀 Starting audio capture daemon..."
     
-    if sudo launchctl list | grep -q "com.savant.audio.daemon"; then
-        print_warning "Daemon is already running"
+    # Check if already running
+    if is_daemon_running; then
+        local pid=$(get_daemon_pid)
+        print_warning "Daemon is already running (PID: $pid)"
         return
     fi
     
-    if [[ ! -f "$DAEMON_PLIST" ]]; then
-        print_error "Daemon not installed. Run setup first:"
-        echo "  ./auto-setup-system-audio.sh"
+    if is_daemon_running_launchd; then
+        print_warning "Daemon is already running via launchd"
+        return
+    fi
+    
+    # Check if daemon script exists
+    if [[ ! -f "$DAEMON_SCRIPT" ]]; then
+        print_error "Daemon script not found: $DAEMON_SCRIPT"
         return 1
     fi
     
-    sudo launchctl load "$DAEMON_PLIST"
+    # Start daemon in background
+    print_info "Starting daemon script in background..."
+    nohup "$DAEMON_SCRIPT" > /dev/null 2>&1 &
+    local daemon_pid=$!
+    
+    # Give it a moment to start
     sleep 2
     
-    if sudo launchctl list | grep -q "com.savant.audio.daemon"; then
-        print_status "Audio capture daemon started successfully!"
+    # Verify it started successfully
+    if is_daemon_running; then
+        local actual_pid=$(get_daemon_pid)
+        print_status "Audio capture daemon started successfully! (PID: $actual_pid)"
         print_info "Monitor with: tail -f $LOG_FILE"
+        print_info "Stop with: $0 stop"
     else
         print_error "Failed to start daemon"
+        print_info "Check logs: cat $LOG_FILE"
+        return 1
     fi
 }
 
 stop_daemon() {
     echo "🛑 Stopping audio capture daemon..."
     
-    if ! sudo launchctl list | grep -q "com.savant.audio.daemon"; then
-        print_warning "Daemon is not running"
-        return
+    local stopped_something=false
+    
+    # Stop PID-based daemon
+    if is_daemon_running; then
+        local pid=$(get_daemon_pid)
+        print_info "Stopping PID-based daemon (PID: $pid)..."
+        
+        # Try graceful shutdown first
+        kill -TERM "$pid" 2>/dev/null
+        sleep 2
+        
+        # Check if it stopped
+        if ! is_daemon_running; then
+            print_status "Audio capture daemon stopped gracefully"
+            stopped_something=true
+        else
+            print_warning "Graceful shutdown failed, using force..."
+            kill -KILL "$pid" 2>/dev/null
+            sleep 1
+            
+            if ! is_daemon_running; then
+                print_status "Audio capture daemon stopped (forced)"
+                stopped_something=true
+            else
+                print_error "Failed to stop daemon"
+            fi
+        fi
+        
+        # Clean up stale PID file
+        rm -f "$PID_FILE"
     fi
     
-    sudo launchctl unload "$DAEMON_PLIST"
-    sleep 2
+    # Stop launchd-based daemon
+    if is_daemon_running_launchd; then
+        print_info "Stopping launchd-based daemon..."
+        sudo launchctl unload "$DAEMON_PLIST" 2>/dev/null
+        sleep 1
+        
+        if ! is_daemon_running_launchd; then
+            print_status "Launchd daemon stopped"
+            stopped_something=true
+        else
+            print_error "Failed to stop launchd daemon"
+        fi
+    fi
     
-    if ! sudo launchctl list | grep -q "com.savant.audio.daemon"; then
-        print_status "Audio capture daemon stopped"
-    else
-        print_error "Failed to stop daemon"
+    if ! $stopped_something; then
+        print_warning "No running daemon found to stop"
     fi
 }
 
@@ -164,6 +246,32 @@ search_captures() {
     done || print_warning "No matches found for \"$1\""
 }
 
+test_multiple_instances() {
+    echo "🧪 Testing multiple instance protection..."
+    echo "========================================"
+    
+    if is_daemon_running; then
+        local pid=$(get_daemon_pid)
+        print_info "Daemon is currently running (PID: $pid)"
+        print_info "Attempting to start a second instance..."
+        
+        # Try to start the daemon script directly to test protection
+        "$DAEMON_SCRIPT" &
+        local test_pid=$!
+        sleep 2
+        
+        # Check if the test process is still running (it shouldn't be)
+        if ps -p "$test_pid" > /dev/null 2>&1; then
+            print_error "Multiple instance protection FAILED - second instance is running!"
+            kill "$test_pid" 2>/dev/null
+        else
+            print_status "Multiple instance protection WORKING - second instance was rejected"
+        fi
+    else
+        print_warning "No daemon currently running. Start one first with: $0 start"
+    fi
+}
+
 show_help() {
     echo "🎵 Savant Audio Control"
     echo "======================"
@@ -178,6 +286,7 @@ show_help() {
     echo "  logs       - View live daemon logs"
     echo "  list       - List all captured transcripts"
     echo "  search     - Search transcripts for text"
+    echo "  test       - Test multiple instance protection"
     echo "  setup      - Run the automated setup"
     echo "  help       - Show this help"
     echo ""
@@ -215,6 +324,9 @@ case "$1" in
         ;;
     "search")
         search_captures "$2"
+        ;;
+    "test")
+        test_multiple_instances
         ;;
     "setup")
         ./auto-setup-system-audio.sh

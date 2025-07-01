@@ -13,11 +13,14 @@ An invisible, seamless AI assistant with real-time system audio transcription, s
 - Implement MCP server(s) for chatbot to interact with smart database (and other outside tools)
 - Fix non-functional browser monitor module and repair / update the GUI 
 
-## Core features
-- Audio Transcription: Real-time speech-to-text pipeline monitoring all audio I/O with smart database for long-term memory
-- Chat Assistant: Local Ollama integration with conversation memory  
-- [WIP] Browser Monitoring: Accessibility API-based content detection
-- Invisibility: All operation should be hidden from external screen capture, screenshots, etc.
+## Core Features
+- **Audio Transcription**: Real-time speech-to-text pipeline with background daemon monitoring all audio I/O
+- **Smart Memory**: SQLite database for long-term conversation and transcript storage
+- **Chat Assistant**: Local Ollama integration with conversation memory and automatic startup
+- **Browser Monitoring**: Accessibility API-based content detection (WIP)
+- **Single-Instance Protection**: PID-based daemon management prevents conflicts
+- **UNIX Philosophy**: Composable CLI tools for audio, transcription, and database operations
+- **Invisibility**: Hidden from external screen capture and screenshots
 
 ## Architecture
 
@@ -72,7 +75,7 @@ sequenceDiagram
     DB->>DB: Store + index
 ```
 
-## i think this is the quickest way to start rn
+## Quick Start
 
 ```bash
 # Install dependencies
@@ -87,6 +90,10 @@ cargo tauri dev
 # CLI tools
 cargo run --package savant-transcribe -- --language en --duration 10
 cargo run --package savant-db -- list
+
+# Audio daemon
+./scripts/audio/savant-audio-control.sh start
+./scripts/audio/savant-audio-control.sh status
 ```
 
 ## Project Structure
