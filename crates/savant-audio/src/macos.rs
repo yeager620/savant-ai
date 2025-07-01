@@ -2,6 +2,7 @@
 
 use crate::{AudioConfig, AudioSample, AudioStream, StreamControl};
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -20,7 +21,7 @@ impl MacOSSystemCapture {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl StreamControl for MacOSSystemCapture {
     async fn stop(&self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);

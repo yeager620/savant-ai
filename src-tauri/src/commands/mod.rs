@@ -4,6 +4,7 @@ pub mod config;
 pub mod hotkey;
 pub mod llm;
 pub mod system;
+pub mod audio;
 
 pub use browser::*;
 pub use chat_history::*;
@@ -11,3 +12,4 @@ pub use config::*;
 pub use hotkey::*;
 pub use llm::*;
 pub use system::*;
+pub use audio::*;
