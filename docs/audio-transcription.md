@@ -386,19 +386,19 @@ The system includes a background daemon for continuous audio monitoring:
 
 ```bash
 # Start background daemon
-./scripts/audio/savant-audio-control.sh start
+./sav start
 
 # Check daemon status
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # View live logs
-./scripts/audio/savant-audio-control.sh logs
+./sav logs
 
 # Search captured content
-./scripts/audio/savant-audio-control.sh search "meeting"
+./sav search "meeting"
 
 # Stop daemon
-./scripts/audio/savant-audio-control.sh stop
+./sav stop
 ```
 
 ### Single-Instance Protection
@@ -412,7 +412,7 @@ The daemon uses PID-based locking to prevent multiple instances:
 
 ```bash
 # Test protection mechanism
-./scripts/audio/savant-audio-control.sh test
+./sav test
 ```
 
 ### Daemon Configuration
@@ -443,11 +443,11 @@ curl -X POST -H "Content-Type: application/json" \
 ### Continuous Monitoring
 ```bash
 # Background daemon handles continuous recording
-./scripts/audio/savant-audio-control.sh start
+./sav start
 
 # Monitor activity
-./scripts/audio/savant-audio-control.sh logs
+./sav logs
 
 # Search recent captures
-./scripts/audio/savant-audio-control.sh search "project update"
+./sav search "project update"
 ```

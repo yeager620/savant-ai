@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Savant Audio Control - Short wrapper for audio daemon management
+# Usage: sav <command> [args]
+
+SCRIPT_DIR="$(dirname "$0")"
+CONTROL_SCRIPT="$SCRIPT_DIR/scripts/audio/savant-audio-control.sh"
+
+# Pass all arguments directly to the control script
+exec "$CONTROL_SCRIPT" "$@"

@@ -92,8 +92,8 @@ cargo run --package savant-transcribe -- --language en --duration 10
 cargo run --package savant-db -- list
 
 # Audio daemon
-./scripts/audio/savant-audio-control.sh start
-./scripts/audio/savant-audio-control.sh status
+./sav start
+./sav status
 ```
 
 ## Project Structure

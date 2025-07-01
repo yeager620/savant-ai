@@ -27,31 +27,31 @@ This script automatically:
 ### Manual Control
 ```bash
 # Check daemon status and recent activity
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # Start background capture daemon
-./scripts/audio/savant-audio-control.sh start
+./sav start
 
 # Stop capture daemon
-./scripts/audio/savant-audio-control.sh stop
+./sav stop
 
 # Restart daemon
-./scripts/audio/savant-audio-control.sh restart
+./sav restart
 
 # View live daemon logs
-./scripts/audio/savant-audio-control.sh logs
+./sav logs
 
 # List all captured transcripts
-./scripts/audio/savant-audio-control.sh list
+./sav list
 
 # Search transcripts for specific text
-./scripts/audio/savant-audio-control.sh search "meeting"
+./sav search "meeting"
 
 # Test single-instance protection
-./scripts/audio/savant-audio-control.sh test
+./sav test
 
 # Run automated setup
-./scripts/audio/savant-audio-control.sh setup
+./sav setup
 ```
 
 ## How It Works
@@ -103,19 +103,19 @@ All commands should be run from the `savant-ai` project directory.
 ### Primary Interface (Recommended)
 ```bash
 # Check daemon status and recent activity
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # Start the daemon
-./scripts/audio/savant-audio-control.sh start
+./sav start
 
 # Stop the daemon
-./scripts/audio/savant-audio-control.sh stop
+./sav stop
 
 # Restart the daemon
-./scripts/audio/savant-audio-control.sh restart
+./sav restart
 
 # Test single-instance protection
-./scripts/audio/savant-audio-control.sh test
+./sav test
 ```
 
 ### Direct Daemon Control (Advanced)
@@ -143,16 +143,16 @@ launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 ### Monitoring and Logs
 ```bash
 # View live logs
-./scripts/audio/savant-audio-control.sh logs
+./sav logs
 
 # View recent log entries
 tail -20 ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 
 # List all captures
-./scripts/audio/savant-audio-control.sh list
+./sav list
 
 # Search transcripts
-./scripts/audio/savant-audio-control.sh search "meeting"
+./sav search "meeting"
 
 # Check capture directory
 ls -la ~/Documents/savant-ai/data/audio-captures/
@@ -164,7 +164,7 @@ tail ~/Documents/savant-ai/data/audio-captures/$(ls -t ~/Documents/savant-ai/dat
 ### Debugging and Testing
 ```bash
 # Test single-instance protection
-./scripts/audio/savant-audio-control.sh test
+./sav test
 
 # Check system audio devices
 ./scripts/audio/audio-devices.sh
@@ -181,16 +181,16 @@ cargo run --package savant-transcribe -- --duration 10 --system --output test.md
 ### Content Search
 ```bash
 # Search for meetings
-./scripts/audio/savant-audio-control.sh search "meeting"
+./sav search "meeting"
 
 # Search for music
-./scripts/audio/savant-audio-control.sh search "song\|music\|artist"
+./sav search "song\|music\|artist"
 
 # Search for calls
-./scripts/audio/savant-audio-control.sh search "zoom\|teams\|call"
+./sav search "zoom\|teams\|call"
 
 # List all captures
-./scripts/audio/savant-audio-control.sh list
+./sav list
 ```
 
 ## What Gets Captured
@@ -281,22 +281,22 @@ brew install blackhole-2ch
 ./scripts/audio/audio-devices.sh
 
 # Verify BlackHole is available
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # Check daemon logs
-./scripts/audio/savant-audio-control.sh logs
+./sav logs
 ```
 
 #### "Daemon won't start"
 ```bash
 # Check daemon status
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # Restart daemon
-./scripts/audio/savant-audio-control.sh restart
+./sav restart
 
 # Test single-instance protection
-./scripts/audio/savant-audio-control.sh test
+./sav test
 
 # Check for conflicting processes
 ps aux | grep savant-audio-daemon
@@ -305,16 +305,16 @@ ps aux | grep savant-audio-daemon
 #### "Multiple instance errors"
 ```bash
 # Check current daemon status
-./scripts/audio/savant-audio-control.sh status
+./sav status
 
 # Stop existing daemon first
-./scripts/audio/savant-audio-control.sh stop
+./sav stop
 
 # Clean up stale PID file if needed
 rm -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.pid
 
 # Start fresh daemon
-./scripts/audio/savant-audio-control.sh start
+./sav start
 ```
 
 #### "No transcripts generated"
@@ -328,7 +328,7 @@ wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin 
 ### Reset Everything
 ```bash
 # Stop daemon
-./scripts/audio/savant-audio-control.sh stop
+./sav stop
 
 # Remove launchd service (if installed)
 rm -f ~/Library/LaunchAgents/com.savant.audio.daemon.plist
@@ -405,11 +405,11 @@ mdfind "kind:text AND (meeting OR call)"
 
 If you encounter issues:
 
-1. **Check Status**: `./scripts/audio/savant-audio-control.sh status`
-2. **View Logs**: `./scripts/audio/savant-audio-control.sh logs`
-3. **Test Protection**: `./scripts/audio/savant-audio-control.sh test`
+1. **Check Status**: `./sav status`
+2. **View Logs**: `./sav logs`
+3. **Test Protection**: `./sav test`
 4. **List Devices**: `./scripts/audio/audio-devices.sh`
-5. **Restart Daemon**: `./scripts/audio/savant-audio-control.sh restart`
+5. **Restart Daemon**: `./sav restart`
 
 For persistent issues, check the daemon log file:
 ```bash
