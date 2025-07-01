@@ -68,19 +68,94 @@ Microphone → Apps (normal usage)
 - **Captures**: `~/savant-audio-captures/*.md`
 - **Logs**: `~/savant-audio-daemon.log`
 - **Daemon Script**: `~/savant-audio-daemon.sh`
-- **Service**: `/Library/LaunchAgents/com.savant.audio.daemon.plist`
+- **Service**: `~/Library/LaunchAgents/com.savant.audio.daemon.plist`
 
-## 🎮 Usage Examples
+## 🎮 Daemon Management Commands
 
-### Start Background Capture
+All commands should be run from the `savant-ai` project directory (`/Users/yeager/Documents/savant-ai/`):
+
+### Start/Stop/Status Commands
 ```bash
-./savant-audio-control.sh start
+# Start the daemon
+launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+
+# Stop the daemon
+launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+
+# Check if daemon is running (look for com.savant.audio.daemon)
+launchctl list | grep savant
+
+# Get detailed daemon status
+launchctl print gui/$(id -u)/com.savant.audio.daemon
 ```
 
-### Monitor Activity
+### Log Commands
 ```bash
+# View recent logs (last 20 lines)
+tail -20 ~/savant-audio-daemon.log
+
+# Follow logs in real-time (Ctrl+C to stop)
+tail -f ~/savant-audio-daemon.log
+
+# View all logs
+cat ~/savant-audio-daemon.log
+
+# View error logs
+cat ~/savant-audio-daemon.err
+
+# View stdout logs
+cat ~/savant-audio-daemon.out
+
+# Clear logs
+> ~/savant-audio-daemon.log
+```
+
+### Monitoring Commands
+```bash
+# Check capture directory
+ls -la ~/savant-audio-captures/
+
+# Count capture files
+ls ~/savant-audio-captures/ | wc -l
+
+# Check latest capture file
+ls -t ~/savant-audio-captures/ | head -1
+
+# View recent capture content
+tail ~/savant-audio-captures/$(ls -t ~/savant-audio-captures/ | head -1)
+```
+
+### Debugging Commands
+```bash
+# Test the script manually (single run)
+bash ~/savant-audio-daemon.sh
+
+# Check daemon process
+ps aux | grep savant-audio-daemon
+
+# Check system audio devices
+./audio-devices.sh
+
+# Test cargo command directly
+cargo run --package savant-transcribe -- --duration 10 --system --output test.md
+```
+
+### Control Script (Alternative)
+```bash
+# Start daemon
+./savant-audio-control.sh start
+
+# Stop daemon  
+./savant-audio-control.sh stop
+
+# Check status
+./savant-audio-control.sh status
+
+# View logs
 ./savant-audio-control.sh logs
 ```
+
+## 🎮 Usage Examples
 
 ### Find Specific Content
 ```bash
@@ -194,14 +269,18 @@ brew install blackhole-2ch
 
 #### "Daemon won't start"
 ```bash
-# Check permissions
-sudo launchctl list | grep savant
+# Check if daemon is loaded
+launchctl list | grep savant
 
 # Restart daemon
-./savant-audio-control.sh restart
+launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
+launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 
-# Manual daemon start
-sudo launchctl load /Library/LaunchAgents/com.savant.audio.daemon.plist
+# Check daemon status
+launchctl print gui/$(id -u)/com.savant.audio.daemon
+
+# Alternative restart using control script
+./savant-audio-control.sh restart
 ```
 
 #### "No transcripts generated"
@@ -215,13 +294,19 @@ wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin 
 ### Reset Everything
 ```bash
 # Stop daemon
-./savant-audio-control.sh stop
+launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 
 # Remove service
-sudo rm /Library/LaunchAgents/com.savant.audio.daemon.plist
+rm ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 
-# Remove daemon script
+# Remove daemon script and logs
 rm ~/savant-audio-daemon.sh
+rm ~/savant-audio-daemon.log
+rm ~/savant-audio-daemon.err
+rm ~/savant-audio-daemon.out
+
+# Clear captures (optional)
+rm -rf ~/savant-audio-captures/
 
 # Uninstall BlackHole
 brew uninstall blackhole-2ch
