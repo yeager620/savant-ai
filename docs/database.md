@@ -1,480 +1,423 @@
 # Database System
 
-Comprehensive guide to Savant AI's SQLite-based database system for conversation history, transcript analytics, and rich querying capabilities.
+Advanced SQLite-based conversation storage with speaker identification, semantic search, and relationship analytics.
 
-## Overview
-
-The database system provides persistent storage for transcription data with full-text search, conversation grouping, and speaker analytics. Built on SQLite with FTS (Full-Text Search) for efficient content querying.
-
-### Key Features
-
-- **Conversation Grouping**: Related transcript segments organized by conversation
-- **Speaker Analytics**: Track time spent, segment counts, and confidence by speaker
-- **Full-Text Search**: Fast content searching across all transcripts
-- **Rich Querying**: Complex filters by speaker, time, content, and metadata
-- **Export Capabilities**: JSON export for external data processing
-- **Migration Tools**: Convert existing markdown files to database (planned)
-
-## Database Schema
-
-### Core Tables
-
-```sql
--- Conversations table for grouping related segments
-CREATE TABLE conversations (
-    id TEXT PRIMARY KEY,              -- UUID
-    title TEXT,                       -- User-friendly title
-    start_time DATETIME NOT NULL,     -- First segment timestamp
-    end_time DATETIME,                -- Last segment timestamp  
-    context TEXT,                     -- Additional description
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Transcript segments table
-CREATE TABLE segments (
-    id TEXT PRIMARY KEY,              -- UUID
-    conversation_id TEXT NOT NULL,    -- Foreign key to conversations
-    timestamp DATETIME NOT NULL,      -- When segment was recorded
-    speaker TEXT NOT NULL,            -- Speaker identifier
-    audio_source TEXT NOT NULL,       -- JSON: AudioSource enum
-    text TEXT NOT NULL,               -- Transcribed text content
-    start_time REAL NOT NULL,         -- Relative time within segment
-    end_time REAL NOT NULL,           -- Relative time within segment
-    confidence REAL,                  -- Optional confidence score
-    metadata TEXT,                    -- Full TranscriptionResult JSON
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-);
-
--- Future: Participants table for speaker management
-CREATE TABLE participants (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    voice_profile TEXT,               -- For speaker recognition
-    metadata TEXT,                    -- Additional speaker data
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Indexes for Performance
-
-```sql
--- Core performance indexes
-CREATE INDEX idx_segments_conversation_id ON segments(conversation_id);
-CREATE INDEX idx_segments_timestamp ON segments(timestamp);
-CREATE INDEX idx_segments_speaker ON segments(speaker);
-CREATE INDEX idx_segments_audio_source ON segments(audio_source);
-CREATE INDEX idx_conversations_start_time ON conversations(start_time);
-
--- Full-text search index
-CREATE VIRTUAL TABLE segments_fts USING fts5(
-    text,
-    content='segments',
-    content_rowid='rowid'
-);
-```
-
-## Database Operations
-
-### Storage Operations
-
-#### Store Transcription Data
-```bash
-# Store from transcription pipeline
-savant-transcribe --speaker "user" --duration 30 | \
-savant-db store --title "Voice Note"
-
-# Store with context
-echo '{"text":"Meeting notes","segments":[...]}' | \
-savant-db store --title "Team Standup" --context "Daily sync meeting"
-
-# Add to existing conversation
-savant-transcribe --speaker "presenter" | \
-savant-db store --conversation "existing-conv-id"
-```
-
-#### Manual Conversation Management
-```bash
-# Create new conversation
-savant-db create --title "Interview Session" --context "Technical interview"
-
-# Returns: Created conversation: uuid-here
-```
-
-### Query Operations
-
-#### Basic Queries
-```bash
-# List recent conversations
-savant-db list --limit 20
-
-# Query by speaker
-savant-db query --speaker "john_doe" --limit 50
-
-# Search content
-savant-db query --text "project alpha discussion"
-```
-
-#### Advanced Filtering
-```bash
-# Time-based queries
-savant-db query --start "2025-07-01T00:00:00Z" --end "2025-07-01T23:59:59Z"
-
-# Combined filters
-savant-db query --speaker "user" --text "meeting" --limit 20 --offset 40
-
-# Audio source filtering
-savant-db query --audio-source "SystemAudio" --start "2025-07-01T09:00:00Z"
-```
-
-#### Full-Text Search
-```bash
-# Content search with ranking
-savant-db search "quantum computing discussion" --limit 10
-
-# Search within specific conversations
-savant-db search "action items" --conversation "meeting-conv-id"
-
-# Search with speaker filter
-savant-db search "project deadline" --speaker "manager"
-```
-
-### Analytics Operations
-
-#### Speaker Statistics
-```bash
-# Overall speaker stats
-savant-db stats
-
-# Output example:
-# Speaker          Conversations  Total Time    Segments  Avg Confidence
-# user             45             2.5 hours     892       0.87
-# system           23             1.2 hours     445       0.92
-# john_doe         12             0.8 hours     234       0.85
-```
-
-#### Conversation Analytics
-```bash
-# Conversation duration analysis
-savant-db analyze duration --speaker "user" --days 30
-
-# Speaking pattern analysis
-savant-db analyze patterns --conversation "meeting-id"
-
-# Confidence trends
-savant-db analyze confidence --start "2025-07-01T00:00:00Z"
-```
-
-### Export Operations
-
-#### JSON Export
-```bash
-# Export single conversation
-savant-db export conversation-id-123 --output analysis.json
-
-# Export with filters
-savant-db query --speaker "user" --start "2025-07-01T00:00:00Z" | \
-jq '.' > daily_transcripts.json
-
-# Bulk export
-savant-db export-all --format json --output bulk_export.json
-```
-
-#### Format Conversion
-```bash
-# Convert to CSV for spreadsheet analysis
-savant-db query --speaker "user" | \
-jq -r '.[] | [.timestamp, .speaker, .text, .confidence] | @csv' > transcripts.csv
-
-# Generate markdown reports
-savant-db export conversation-id --format markdown > meeting_notes.md
-```
-
-## Data Pipeline Integration
-
-### Real-Time Pipeline
+## Architecture Overview
 
 ```mermaid
-sequenceDiagram
-    participant Audio as Audio Input
-    participant Trans as savant-transcribe
-    participant DB as savant-db
-    participant App as Desktop App
+graph TB
+    subgraph "Storage Layer"
+        TS[Time-Series Conversations]
+        SEG[Conversation Segments]
+        SPK[Speaker Profiles]
+        REL[Speaker Relationships]
+        TOP[Topics & Embeddings]
+    end
     
-    Audio->>Trans: Continuous recording
-    Trans->>Trans: Whisper processing
-    Trans->>Trans: Post-processing
-    Trans->>DB: JSON stream
-    DB->>DB: Store + index
-    DB->>App: Notify new data
-    App->>App: Update UI
+    subgraph "Index Layer"
+        TIME[Time Indexes]
+        FTS[Full-Text Search]
+        VECTOR[Vector Similarity]
+        SPEAKER[Speaker Lookups]
+    end
+    
+    subgraph "Query Layer"
+        FILTER[Person/Time Filters]
+        SEARCH[Semantic Search]
+        ANALYTICS[Relationship Analytics]
+    end
+    
+    TS --> TIME
+    SEG --> FTS
+    SEG --> VECTOR
+    SPK --> SPEAKER
+    
+    TIME --> FILTER
+    FTS --> SEARCH
+    VECTOR --> SEARCH
+    SPEAKER --> ANALYTICS
 ```
 
-### Batch Processing Pipeline
+## Core Schema
 
+### Speaker Management
+```sql
+-- Speaker profiles with voice biometrics
+CREATE TABLE speakers (
+    id TEXT PRIMARY KEY,
+    name TEXT,                          -- Display name
+    voice_embedding BLOB,               -- 512-dim voice signature
+    text_patterns TEXT,                 -- JSON: common phrases
+    confidence_threshold REAL DEFAULT 0.75,
+    total_conversation_time REAL DEFAULT 0.0,
+    total_conversations INTEGER DEFAULT 0,
+    last_interaction TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Speaker relationship analytics
+CREATE TABLE speaker_relationships (
+    speaker_a_id TEXT REFERENCES speakers(id),
+    speaker_b_id TEXT REFERENCES speakers(id),
+    total_conversations INTEGER DEFAULT 0,
+    total_duration REAL DEFAULT 0.0,
+    last_conversation TIMESTAMPTZ,
+    common_topics TEXT,                 -- JSON array
+    relationship_strength REAL,         -- 0-1 calculated metric
+    PRIMARY KEY (speaker_a_id, speaker_b_id),
+    CHECK (speaker_a_id < speaker_b_id)
+);
+```
+
+### Conversation Storage
+```sql
+-- Time-partitioned conversation containers
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY,
+    start_time TIMESTAMPTZ NOT NULL,   -- Partition key
+    end_time TIMESTAMPTZ,
+    participant_ids UUID[],             -- Array of speaker IDs
+    summary TEXT,
+    topics JSONB,                       -- ["work", "project_alpha"]
+    sentiment_score REAL,
+    quality_score REAL,
+    participant_count INTEGER DEFAULT 0
+);
+
+-- Individual speech segments with speaker attribution
+CREATE TABLE conversation_segments (
+    id UUID PRIMARY KEY,
+    conversation_id UUID REFERENCES conversations(id),
+    speaker_id UUID REFERENCES speakers(id),
+    start_time REAL NOT NULL,           -- Relative to conversation
+    end_time REAL NOT NULL,
+    original_text TEXT,                 -- Raw transcription
+    processed_text TEXT,                -- Cleaned/normalized
+    semantic_embedding BLOB,            -- 384-dim for similarity search
+    confidence REAL,
+    timestamp TIMESTAMPTZ NOT NULL      -- Absolute time
+);
+```
+
+### Performance Indexes
+```sql
+-- Time-based partitioning and filtering
+CREATE INDEX idx_conversations_time ON conversations(start_time);
+CREATE INDEX idx_segments_timestamp ON conversation_segments(timestamp);
+
+-- Speaker-based queries
+CREATE INDEX idx_segments_speaker_time ON conversation_segments(speaker_id, timestamp);
+CREATE INDEX idx_conversations_participants ON conversations USING GIN(participant_ids);
+
+-- Full-text search with speaker attribution
+CREATE VIRTUAL TABLE segments_fts USING fts5(
+    original_text, processed_text, speaker_name,
+    content='conversation_segments'
+);
+
+-- Vector similarity (prepared for semantic search)
+CREATE INDEX idx_segments_embedding ON conversation_segments 
+USING ivfflat (semantic_embedding vector_cosine_ops);
+```
+
+## Query Patterns
+
+### Person-Based Filtering
 ```bash
-# Process existing audio files
-find recordings/ -name "*.wav" | \
-while read file; do
-  echo "Processing: $file"
-  savant-transcribe --input "$file" --speaker "archive" | \
+# All conversations with specific person
+savant-db query --speaker "john_doe" --limit 50
+
+# Conversations between two people
+savant-db query --participants "john_doe,jane_smith" --sort time-desc
+
+# Speaker relationship analysis
+savant-db speaker show john_doe  # Shows interaction stats
+```
+
+```sql
+-- Optimized speaker filtering
+SELECT c.*, array_agg(s.name) as participants
+FROM conversations c
+JOIN speakers s ON s.id = ANY(c.participant_ids)
+WHERE 'john-uuid' = ANY(c.participant_ids)
+  AND c.start_time >= $1
+ORDER BY c.start_time DESC;
+```
+
+### Time-Based Sorting
+```bash
+# Recent conversations (uses time partitioning)
+savant-db list --limit 20 --sort time-desc
+
+# Specific time range
+savant-db query --start "2025-07-01T00:00:00Z" --end "2025-07-01T23:59:59Z"
+
+# Speaker timeline analysis
+savant-db analyze timeline --speaker "john_doe" --timeframe weekly
+```
+
+### Semantic Search
+```bash
+# Text-based semantic search
+savant-db search "project meeting discussion" --limit 10 --threshold 0.7
+
+# Speaker-filtered semantic search
+savant-db search "deadline concerns" --speaker "manager" --limit 5
+
+# Cross-conversation topic search
+savant-db topic extract conversation-id
+savant-db topic list conversation-id
+```
+
+### Analytics Queries
+```bash
+# Speaker statistics
+savant-db speaker list                    # All speakers with stats
+savant-db speaker duplicates              # Find potential duplicates
+savant-db speaker merge primary secondary # Merge speaker profiles
+
+# Conversation analysis
+savant-db analyze conversation-id         # Extract insights
+savant-db stats                          # Overall database statistics
+```
+
+## Data Structures
+
+### Speaker Index (In-Memory)
+```rust
+pub struct SpeakerIndex {
+    // Fast speaker lookup
+    speaker_conversations: HashMap<SpeakerId, BTreeSet<ConversationId>>,
+    
+    // Time-ordered per speaker
+    speaker_timeline: HashMap<SpeakerId, BTreeMap<DateTime<Utc>, ConversationId>>,
+    
+    // Relationship graph
+    relationship_graph: HashMap<SpeakerId, HashMap<SpeakerId, RelationshipMetrics>>,
+    
+    // Voice embedding cache
+    voice_embeddings: HashMap<SpeakerId, Array1<f32>>,
+}
+```
+
+### Hierarchical Time Index
+```rust
+pub struct ConversationIndex {
+    // Year → Month → Day hierarchy
+    yearly_index: HashMap<i32, MonthlyIndex>,
+    monthly_index: HashMap<(i32, u32), DailyIndex>, 
+    daily_index: HashMap<NaiveDate, Vec<ConversationId>>,
+    
+    // Hot data cache (last 7 days)
+    recent_conversations: LruCache<ConversationId, Conversation>,
+}
+```
+
+### Semantic Search Engine
+```rust
+pub struct SemanticSearchEngine {
+    // Vector similarity cache
+    embedding_cache: HashMap<String, Array1<f32>>,
+    
+    // Topic extraction and analysis
+    topic_model: TopicExtractor,
+    sentiment_analyzer: SentimentAnalyzer,
+}
+```
+
+## Performance Optimizations
+
+### Query Optimization
+```sql
+-- GOOD: Uses indexes efficiently
+SELECT * FROM conversations 
+WHERE 'speaker-uuid' = ANY(participant_ids) 
+  AND start_time >= '2025-01-01'::timestamptz 
+ORDER BY start_time DESC LIMIT 20;
+
+-- GOOD: FTS for text search
+SELECT * FROM segments_fts 
+WHERE segments_fts MATCH 'project AND meeting'
+  AND timestamp >= '2025-01-01';
+
+-- BAD: Full table scan
+SELECT * FROM conversation_segments 
+WHERE original_text LIKE '%meeting%';
+```
+
+### Caching Strategy
+```rust
+// Multi-level caching
+pub struct ConversationCache {
+    // Hot data (last 7 days) in memory
+    recent_conversations: LruCache<ConversationId, Conversation>,
+    
+    // Speaker embeddings for fast similarity
+    speaker_embeddings: HashMap<SpeakerId, Array1<f32>>,
+    
+    // Relationship data cache
+    relationship_cache: LruCache<(SpeakerId, SpeakerId), RelationshipMetrics>,
+    
+    // Bloom filter for existence checks
+    conversation_bloom: BloomFilter<ConversationId>,
+}
+```
+
+### Storage Efficiency
+```sql
+-- Compression for older data
+ALTER TABLE conversations SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'participant_count',
+    timescaledb.compress_orderby = 'start_time DESC'
+);
+
+-- Retention policies
+SELECT add_retention_policy('conversations', INTERVAL '2 years');
+```
+
+## Speaker Name Assignment
+
+### Voice Pattern Recognition
+```rust
+// Text-based speaker identification
+pub fn identify_speaker_by_text(&self, text: &str) -> Option<SpeakerMatch> {
+    // Voice assistant commands → user
+    if text.contains("hey siri") || text.contains("ok google") {
+        return Some(SpeakerMatch {
+            speaker_id: "user".to_string(),
+            confidence: 0.8,
+            method: MatchMethod::TextPatterns,
+        });
+    }
+    
+    // System notifications → computer
+    if text.contains("notification") || text.contains("alert") {
+        return Some(SpeakerMatch {
+            speaker_id: "system".to_string(),
+            confidence: 0.7,
+            method: MatchMethod::TextPatterns,
+        });
+    }
+}
+```
+
+### Voice Biometric Framework
+```rust
+// Infrastructure for ML-based speaker identification
+pub struct VoiceEmbedding {
+    pub vector: Array1<f32>,      // 512-dimensional voice signature
+    pub speaker_id: String,
+    pub confidence: f32,
+}
+
+pub fn identify_speaker(&self, embedding: &Array1<f32>) -> Option<SpeakerMatch> {
+    // Compare against known voice signatures using cosine similarity
+    // Implementation ready for pyannote-audio integration
+}
+```
+
+### Progressive Learning
+```bash
+# Manual speaker assignment during recording
+savant-transcribe --speaker "john_doe" --duration 60
+
+# Post-recording identification and merging
+savant-db speaker list                    # Shows anonymous speakers
+savant-db speaker create --name "John Doe" # Create named speaker
+savant-db speaker merge anonymous-id named-id # Merge profiles
+```
+
+## CLI Reference
+
+### Core Operations
+```bash
+# Store transcriptions with speaker attribution
+savant-transcribe --speaker "user" | savant-db store --title "Voice Note"
+
+# Query with multiple filters
+savant-db query --speaker "john_doe" --text "meeting" --start "2025-07-01T00:00:00Z"
+
+# Semantic search across all conversations
+savant-db search "project deadline discussion" --limit 10 --threshold 0.7
+```
+
+### Speaker Management
+```bash
+savant-db speaker list                    # List all speakers with statistics
+savant-db speaker create --name "John"    # Create new speaker profile
+savant-db speaker show speaker-id         # Show detailed speaker information
+savant-db speaker duplicates              # Find potential duplicate speakers
+savant-db speaker merge primary secondary # Merge two speaker profiles
+```
+
+### Analytics & Insights
+```bash
+savant-db analyze conversation-id         # Extract conversation insights
+savant-db stats                          # Overall database statistics
+savant-db topic list conversation-id     # Show conversation topics
+savant-db topic extract conversation-id  # Extract topics automatically
+```
+
+### Export & Integration
+```bash
+savant-db export conversation-id --output analysis.json
+savant-db list --limit 50 | jq '.[] | .summary'
+```
+
+## Integration Examples
+
+### Real-Time Pipeline
+```bash
+# Continuous audio processing with speaker identification
+./sav start  # Background daemon captures audio
+# → Transcription with speaker patterns
+# → Automatic database storage
+# → Real-time speaker relationship updates
+```
+
+### Batch Analysis
+```bash
+# Process historical recordings
+find recordings/ -name "*.wav" | while read file; do
+  savant-transcribe --input "$file" --speaker "archive" | 
   savant-db store --title "Archive: $(basename "$file")"
 done
 
-# Import from external systems
-curl -s "https://api.meeting-service.com/transcripts" | \
-jq '.transcripts[]' | \
-while read -r transcript; do
-  echo "$transcript" | savant-db store --title "External Import"
+# Analyze speaker relationships
+savant-db speaker list | jq -r '.[].id' | while read speaker; do
+  savant-db analyze relationships --speaker "$speaker"
 done
 ```
 
-### Data Validation Pipeline
-
+### External Integration
 ```bash
-# Validate data integrity
-savant-db validate --check-conversations
-savant-db validate --check-fts-sync
-savant-db validate --check-timestamps
+# Export for external analysis
+savant-db export-all --format json | 
+curl -X POST -H "Content-Type: application/json" \
+     -d @- https://analytics-service.com/conversations
 
-# Repair common issues
-savant-db repair --rebuild-fts
-savant-db repair --fix-orphaned-segments
-```
-
-## Performance Optimization
-
-### Query Optimization
-
-#### Use Appropriate Indexes
-```sql
--- Good: Uses timestamp index
-SELECT * FROM segments WHERE timestamp > '2025-07-01' ORDER BY timestamp;
-
--- Bad: Full table scan
-SELECT * FROM segments WHERE text LIKE '%meeting%';
-
--- Better: Use FTS for text search
-SELECT * FROM segments_fts WHERE segments_fts MATCH 'meeting';
-```
-
-#### Pagination for Large Results
-```bash
-# Good: Paginated results
-savant-db query --speaker "user" --limit 50 --offset 100
-
-# Bad: Loading all results
-savant-db query --speaker "user"  # Could return thousands
-```
-
-### Storage Optimization
-
-#### Database Maintenance
-```bash
-# Vacuum database to reclaim space
-savant-db maintenance --vacuum
-
-# Analyze query performance
-savant-db maintenance --analyze
-
-# Rebuild FTS index
-savant-db maintenance --rebuild-fts
-```
-
-#### Archival Strategy
-```bash
-# Archive old conversations
-savant-db archive --older-than "2024-01-01" --output archive_2024.json
-
-# Compress archived data
-savant-db archive --older-than "2024-01-01" | gzip > archive_2024.json.gz
-```
-
-## Migration & Data Import
-
-### Legacy Markdown Import
-
-```bash
-# Import existing markdown files (planned feature)
-find ~/Documents/transcripts/ -name "*.md" | \
-savant-db import-markdown --speaker "user"
-
-# Batch import with metadata extraction
-savant-db import-markdown --directory "transcripts/" --auto-detect-speakers
-```
-
-### External System Integration
-
-```bash
-# Import from Otter.ai exports
-savant-db import-otter --file "otter_export.json" --speaker-mapping "mapping.json"
-
-# Import from Zoom transcripts
-savant-db import-zoom --directory "zoom_transcripts/" --meeting-metadata
-```
-
-### Data Format Migration
-
-```bash
-# Convert old JSON format to new schema
-savant-db migrate --from-version "0.1" --to-version "0.2"
-
-# Validate migration results
-savant-db validate --post-migration
-```
-
-## Backup & Recovery
-
-### Backup Strategies
-
-```bash
-# Simple database backup
-cp ~/.config/savant-ai/transcripts.db backup_$(date +%Y%m%d).db
-
-# Export-based backup
-savant-db export-all --format json | gzip > backup_$(date +%Y%m%d).json.gz
-
-# Incremental backup (future feature)
-savant-db backup --incremental --since "2025-07-01T00:00:00Z"
-```
-
-### Cloud Backup Integration
-
-```bash
-# S3 backup
-savant-db export-all --format json | \
-gzip | \
-aws s3 cp - s3://backup-bucket/transcripts-$(date +%Y%m%d).json.gz
-
-# Encrypted backup
-savant-db export-all --format json | \
-gpg --encrypt --recipient "your@email.com" | \
-gzip > encrypted_backup_$(date +%Y%m%d).gpg.gz
-```
-
-### Recovery Procedures
-
-```bash
-# Restore from backup
-savant-db restore --from-file "backup_20250701.json.gz"
-
-# Partial restore
-savant-db restore --from-file "backup.json.gz" --conversation-filter "meeting-*"
-
-# Verify restore integrity
-savant-db validate --full-check
-```
-
-## Configuration
-
-### Database Settings
-
-```toml
-# In ~/.config/savant-ai/config.toml
-[database]
-path = "~/.config/savant-ai/transcripts.db"
-backup_interval = "24h"
-vacuum_interval = "weekly"
-max_connections = 10
-cache_size = "64MB"
-
-[analytics]
-enable_speaker_tracking = true
-confidence_threshold = 0.7
-auto_conversation_grouping = true
-conversation_timeout = "30m"
-```
-
-### Performance Tuning
-
-```sql
--- SQLite optimization pragmas
-PRAGMA journal_mode = WAL;           -- Write-Ahead Logging
-PRAGMA synchronous = NORMAL;         -- Balance safety/performance  
-PRAGMA cache_size = 10000;           -- 40MB cache
-PRAGMA temp_store = memory;          -- Temp tables in RAM
-PRAGMA mmap_size = 268435456;        -- 256MB memory mapping
-```
-
-## Security & Privacy
-
-### Data Protection
-
-```bash
-# Encrypt database file (future feature)
-savant-db encrypt --password-file "/secure/path/password"
-
-# Anonymize speaker data
-savant-db anonymize --speaker-mapping "real_name->speaker_001"
-
-# Selective data deletion
-savant-db delete --speaker "sensitive_speaker" --confirm
-```
-
-### Access Control
-
-```bash
-# Set database permissions
-chmod 600 ~/.config/savant-ai/transcripts.db
-
-# Audit access patterns
-savant-db audit --show-access-log
-
-# Export audit trail
-savant-db audit --export-log --output audit_$(date +%Y%m%d).json
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Database Lock Errors
-```bash
-# Check for blocking processes
-savant-db status --show-connections
-
-# Force unlock (use carefully)
-savant-db maintenance --force-unlock
-```
-
-#### Corruption Recovery
-```bash
-# Check database integrity
-savant-db validate --integrity-check
-
-# Repair corruption
-savant-db repair --from-backup "backup.db"
-```
-
-#### Performance Issues
-```bash
-# Analyze slow queries
-savant-db analyze --slow-queries --threshold 1000ms
-
-# Rebuild indexes
-savant-db maintenance --rebuild-indexes
-```
-
-### Debug Commands
-
-```bash
-# Verbose database operations
-RUST_LOG=debug savant-db query --speaker "user"
-
-# SQL execution tracing
-RUST_LOG=sqlx=trace savant-db list --limit 5
-
-# Performance profiling
-savant-db profile --operation "complex_query" --iterations 100
+# Import from meeting platforms
+curl -s "https://api.zoom.us/v2/meetings/transcripts" |
+jq '.transcripts[]' |
+savant-db store --title "Zoom Import"
 ```
 
 ## Future Enhancements
 
-### Planned Features
+### ML Integration (Planned)
+- **PyAnnote-Audio**: Voice embedding generation for speaker identification
+- **Sentence Transformers**: Semantic embeddings for advanced search
+- **Speaker Diarization**: Automatic speaker separation in multi-person recordings
 
-- **Real-time Sync**: Live database updates during transcription
-- **Distributed Storage**: Multi-device synchronization
-- **Advanced Analytics**: ML-based speaker recognition and sentiment analysis
-- **API Server**: REST API for external integrations
-- **Graph Database**: Conversation relationship modeling
-- **Vector Search**: Semantic similarity search with embeddings
+### Advanced Analytics (Planned)
+- **Relationship Strength**: Calculate interaction frequency and patterns
+- **Topic Evolution**: Track how discussion topics change over time
+- **Sentiment Trends**: Analyze emotional patterns in conversations
+
+### Distributed Architecture (Planned)
+- **TimescaleDB**: Time-series optimization for large-scale deployments
+- **Vector Databases**: Dedicated similarity search infrastructure
+- **MCP Server**: Model Context Protocol integration for LLM queries
+
+The database system provides a solid foundation for intelligent conversation management while maintaining the project's UNIX philosophy and privacy-first approach.

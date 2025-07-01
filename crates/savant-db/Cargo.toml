@@ -16,6 +16,10 @@ clap = { version = "4.0", features = ["derive"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 dirs = "5.0"
+# Vector similarity search (simplified)
+ndarray = "0.15"
+# Regular expressions for text processing
+regex = "1.10"
 
 [[bin]]
 name = "savant-db"

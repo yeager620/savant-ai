@@ -5,21 +5,22 @@ An invisible, seamless AI assistant with real-time system audio transcription, s
 *Only works on MacOS as of now*
 
 ## **TODO:**
-- Refine structure / shape of (.md file) audio transcript output
-- Determine behaviour and implement data pipeline from audio transcripts to smart database
+- ✅? ~~Determine behaviour and implement data pipeline from audio transcripts to smart database~~
+- Implement MCP server for chatbot to interact with smart database (foundation completed)
 - Figure out how to replicate app functionality on non MacOS systems, i.e. Windows & Linux
 - Figure out how to containerize application and distribute; i.e. automate release cycle
 - Implement more flexible / robust chatbot API solution; allow for use on machines that can t run Ollama models locally; allow for use of different models
-- Implement MCP server(s) for chatbot to interact with smart database (and other outside tools)
 - Fix non-functional browser monitor module and repair / update the GUI 
+- Enhance speaker identification with ML models (pyannote-audio integration)
+- Add semantic embeddings for advanced conversation search 
 
 ## Core Features
 - **Audio Transcription**: Real-time speech-to-text pipeline with background daemon monitoring all audio I/O
-- **Smart Memory**: SQLite database for long-term conversation and transcript storage
+- **Smart Memory**: SQLite database with speaker identification and conversation analytics
+- **Speaker Recognition**: Text-pattern based identification with framework for voice biometrics
+- **Semantic Search**: Full-text and similarity-based search across all conversations
 - **Chat Assistant**: Local Ollama integration with conversation memory and automatic startup
 - **Browser Monitoring**: Accessibility API-based content detection (WIP)
-- **Single-Instance Protection**: PID-based daemon management prevents conflicts
-- **UNIX Philosophy**: Composable CLI tools for audio, transcription, and database operations
 - **Invisibility**: Hidden from external screen capture and screenshots
 
 ## Architecture
@@ -90,6 +91,8 @@ cargo tauri dev
 # CLI tools
 cargo run --package savant-transcribe -- --language en --duration 10
 cargo run --package savant-db -- list
+cargo run --package savant-db -- search "meeting" --limit 10
+cargo run --package savant-db -- speaker list
 
 # Audio daemon
 ./sav start
@@ -133,6 +136,6 @@ auto_speaker_detection = true
 
 ## Status
 
-**✅ Working**: Audio transcription, chat assistant, browser monitoring, CLI tools  
-**🔄 In Progress**: Database integration, frontend optimization  
-**📋 Planned**: Voice profiles, real-time streaming, advanced analytics
+**Working**: Audio transcription, chat assistant, browser monitoring, CLI tools  
+**In Progress**: Database integration, frontend optimization  
+**Planned**: Voice profiles, real-time streaming, advanced analytics

@@ -82,7 +82,7 @@ The transcription tool automatically handles common speech-to-text issues:
 
 ## savant-db
 
-Database management for conversation history and transcript analytics.
+Advanced database management with speaker identification, semantic search, and conversation analytics.
 
 ### Storage Operations
 
@@ -100,24 +100,49 @@ savant-db create --title "Interview Session" --context "Technical interview with
 ### Querying & Search
 
 ```bash
-# Query by speaker
+# Basic queries by speaker and time
 savant-db query --speaker "john_doe" --limit 50
-
-# Search content with full-text search
-savant-db query --text "project alpha discussion"
-
-# Time-based filtering
 savant-db query --start "2025-07-01T00:00:00Z" --end "2025-07-01T23:59:59Z"
+
+# Advanced semantic search
+savant-db search "project deadline discussion" --limit 10 --threshold 0.7
+savant-db search "budget concerns" --speaker "manager" --limit 5
 
 # Combined filters with pagination
 savant-db query --speaker "user" --text "meeting" --limit 20 --offset 40
 ```
 
-### Analytics & Statistics
+### Speaker Management
 
 ```bash
-# Speaker conversation statistics
+# List all speakers with statistics
+savant-db speaker list
+
+# Create new speaker profile
+savant-db speaker create --name "John Doe"
+
+# Show detailed speaker information
+savant-db speaker show speaker-uuid-here
+
+# Find potential duplicate speakers
+savant-db speaker duplicates
+
+# Merge two speaker profiles
+savant-db speaker merge primary-speaker-id secondary-speaker-id
+```
+
+### Analytics & Insights
+
+```bash
+# Overall database statistics
 savant-db stats
+
+# Analyze specific conversation
+savant-db analyze conversation-uuid-here
+
+# Topic management
+savant-db topic list conversation-uuid-here
+savant-db topic extract conversation-uuid-here
 
 # List recent conversations
 savant-db list --limit 20
@@ -126,31 +151,50 @@ savant-db list --limit 20
 savant-db export conversation-id-123 --output analysis.json
 ```
 
-### Database Schema
+### Enhanced Database Schema
 
 ```sql
--- Conversations table
-CREATE TABLE conversations (
+-- Speaker profiles with analytics
+CREATE TABLE speakers (
     id TEXT PRIMARY KEY,
-    title TEXT,
-    start_time DATETIME,
-    end_time DATETIME,
-    context TEXT,
-    participants TEXT  -- JSON array
+    name TEXT,
+    voice_embedding BLOB,               -- Voice biometrics
+    total_conversation_time REAL,
+    total_conversations INTEGER,
+    last_interaction TIMESTAMPTZ
 );
 
--- Transcript segments table
-CREATE TABLE segments (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT,
-    timestamp DATETIME,
-    speaker TEXT,
-    audio_source TEXT,  -- "Microphone", "SystemAudio", etc.
-    text TEXT,
-    start_time REAL,    -- Relative time within segment
-    end_time REAL,
-    confidence REAL,
-    metadata TEXT       -- Full JSON blob
+-- Time-partitioned conversations
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY,
+    start_time TIMESTAMPTZ NOT NULL,   -- Partition key
+    participant_ids UUID[],             -- Array of speaker IDs
+    summary TEXT,
+    topics JSONB,                       -- Auto-extracted topics
+    sentiment_score REAL,
+    quality_score REAL
+);
+
+-- Speaker relationship analytics
+CREATE TABLE speaker_relationships (
+    speaker_a_id TEXT,
+    speaker_b_id TEXT,
+    total_conversations INTEGER,
+    total_duration REAL,
+    relationship_strength REAL,
+    common_topics TEXT,                 -- JSON array
+    PRIMARY KEY (speaker_a_id, speaker_b_id)
+);
+
+-- Enhanced transcript segments
+CREATE TABLE conversation_segments (
+    id UUID PRIMARY KEY,
+    conversation_id UUID REFERENCES conversations(id),
+    speaker_id UUID REFERENCES speakers(id),
+    original_text TEXT,
+    processed_text TEXT,                -- Cleaned/normalized
+    semantic_embedding BLOB,            -- 384-dim for similarity search
+    timestamp TIMESTAMPTZ NOT NULL
 );
 ```
 
@@ -213,6 +257,26 @@ savant-db store --title "Voice Note $(date +%Y%m%d-%H%M)"
 # System audio capture for call recording
 savant-transcribe --system --speaker "call_audio" --duration 1800 | \
 savant-db store --title "Client Call - $(date)" --context "Sales discussion"
+
+# Continuous background capture with automatic speaker identification
+./sav start  # Daemon handles continuous processing
+```
+
+### Speaker Intelligence Workflows
+
+```bash
+# Find all conversations with specific person
+savant-db query --speaker "john_doe" --limit 50
+
+# Analyze relationship between two people
+savant-db speaker show john_doe  # Shows interaction statistics
+
+# Merge duplicate speaker profiles
+savant-db speaker duplicates     # Find potential duplicates
+savant-db speaker merge primary-id secondary-id
+
+# Track conversation patterns over time
+savant-db analyze timeline --speaker "john_doe" --timeframe weekly
 ```
 
 ### LLM Integration
@@ -227,22 +291,58 @@ savant-llm "Summarize this transcription: "
 savant-db query --speaker "user" --limit 10 | \
 jq -r '.[].text' | \
 savant-llm "Analyze the sentiment of these conversations"
+
+# Semantic search with AI-powered insights
+savant-db search "project concerns" --limit 5 | \
+jq -r '.[].text' | \
+savant-llm "What are the main issues mentioned in these conversations?"
+```
+
+### Advanced Analytics Workflows
+
+```bash
+# Speaker relationship analysis
+savant-db speaker list | jq -r '.[].id' | while read speaker; do
+  echo "=== $speaker ==="
+  savant-db analyze relationships --speaker "$speaker"
+done
+
+# Topic extraction and analysis
+savant-db list --limit 20 | jq -r '.[].id' | while read conv_id; do
+  savant-db topic extract "$conv_id"
+  savant-db topic list "$conv_id"
+done
+
+# Export speaker interaction matrix
+savant-db export-relationships --format csv > speaker_matrix.csv
+
+# Conversation quality analysis
+savant-db query --limit 100 | \
+jq '.[] | select(.quality_score < 0.8) | .id' | \
+while read conv_id; do
+  echo "Low quality conversation: $conv_id"
+  savant-db analyze "$conv_id"
+done
 ```
 
 ### Data Processing Workflows
 
 ```bash
-# Export all conversations from last week
+# Export all conversations from last week with speaker attribution
 savant-db query --start "$(date -d '7 days ago' -Iseconds)" | \
-jq '.[] | {speaker: .speaker, text: .text}' > weekly_transcripts.json
+jq '.[] | {speaker: .speaker_name, text: .text, timestamp: .timestamp}' > weekly_transcripts.json
 
-# Find all mentions of specific topics
-savant-db query --text "project alpha" | \
-jq -r '.[] | "\(.timestamp): \(.speaker) - \(.text)"' > project_mentions.txt
+# Find semantic matches across conversations
+savant-db search "project alpha" --limit 20 | \
+jq -r '.[] | "\(.timestamp): \(.speaker_name) - \(.text)"' > project_mentions.txt
 
-# Speaker statistics for time tracking
-savant-db stats | \
-jq '.[] | "\(.speaker): \(.total_duration_seconds/3600) hours"'
+# Speaker time tracking and analytics
+savant-db speaker list | \
+jq '.[] | "\(.name // .id): \(.total_conversation_time/3600 | round) hours, \(.total_conversations) conversations"'
+
+# Generate conversation network graph data
+savant-db export-relationships --format json | \
+jq '.relationships[] | {source: .speaker_a_name, target: .speaker_b_name, weight: .relationship_strength}' > network.json
 ```
 
 ### Integration with External Tools

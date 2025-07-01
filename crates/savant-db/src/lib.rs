@@ -11,9 +11,17 @@ use uuid::Uuid;
 
 pub use savant_stt::{TranscriptionResult, TranscriptionSegment, SessionMetadata, AudioSource};
 
-/// Database connection manager
+pub mod speaker_identification;
+pub mod semantic_search;
+
+pub use speaker_identification::{Speaker, SpeakerIdentifier, SpeakerMatch, MatchMethod};
+pub use semantic_search::{SemanticSearchEngine, SearchResult, ConversationAnalysis, Topic};
+
+/// Database connection manager with speaker identification and semantic search
 pub struct TranscriptDatabase {
     pool: SqlitePool,
+    speaker_identifier: Option<SpeakerIdentifier>,
+    semantic_engine: Option<SemanticSearchEngine>,
 }
 
 /// Conversation record for grouping related segments
@@ -66,16 +74,30 @@ impl TranscriptDatabase {
         let database_url = format!("sqlite:{}", path.display());
         let pool = SqlitePool::connect(&database_url).await?;
         
-        let db = Self { pool };
+        let db = Self { 
+            pool: pool.clone(),
+            speaker_identifier: Some(SpeakerIdentifier::new(pool.clone())),
+            semantic_engine: Some(SemanticSearchEngine::new(pool)),
+        };
         db.migrate().await?;
+        
+        // Engines will be initialized via separate methods
+        
         Ok(db)
     }
 
     /// Run database migrations
     async fn migrate(&self) -> Result<()> {
+        // Run initial migration
         sqlx::query(include_str!("../migrations/001_initial.sql"))
             .execute(&self.pool)
             .await?;
+        
+        // Run speaker identification migration
+        sqlx::query(include_str!("../migrations/002_speaker_identification.sql"))
+            .execute(&self.pool)
+            .await?;
+        
         Ok(())
     }
 
@@ -310,5 +332,119 @@ impl TranscriptDatabase {
             "exported_at": Utc::now(),
             "segments": segments
         }))
+    }
+
+    /// Initialize speaker identification system
+    pub async fn init_speaker_identification(&mut self) -> Result<()> {
+        if let Some(ref mut identifier) = self.speaker_identifier {
+            identifier.load_embeddings().await?;
+        }
+        Ok(())
+    }
+
+    /// Initialize semantic search engine
+    pub async fn init_semantic_search(&mut self) -> Result<()> {
+        if let Some(ref mut engine) = self.semantic_engine {
+            engine.load_embeddings().await?;
+        }
+        Ok(())
+    }
+
+    /// Get speaker identifier (immutable access)
+    pub fn speaker_identifier(&self) -> Option<&SpeakerIdentifier> {
+        self.speaker_identifier.as_ref()
+    }
+
+    /// Get mutable speaker identifier
+    pub fn speaker_identifier_mut(&mut self) -> Option<&mut SpeakerIdentifier> {
+        self.speaker_identifier.as_mut()
+    }
+
+    /// Get semantic search engine (immutable access)
+    pub fn semantic_engine(&self) -> Option<&SemanticSearchEngine> {
+        self.semantic_engine.as_ref()
+    }
+
+    /// Get mutable semantic search engine
+    pub fn semantic_engine_mut(&mut self) -> Option<&mut SemanticSearchEngine> {
+        self.semantic_engine.as_mut()
+    }
+
+    /// Text-based search for conversation segments
+    pub async fn text_search(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>> {
+        if let Some(engine) = &self.semantic_engine {
+            engine.text_search(query, limit).await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Semantic search for conversation segments (placeholder)
+    pub async fn semantic_search(
+        &self,
+        query: &str,
+        limit: usize,
+        _min_similarity: f32,
+    ) -> Result<Vec<SearchResult>> {
+        // For now, fall back to text search
+        self.text_search(query, limit).await
+    }
+
+    /// Analyze conversation and extract insights
+    pub async fn analyze_conversation(&self, conversation_id: &str) -> Result<ConversationAnalysis> {
+        if let Some(engine) = &self.semantic_engine {
+            engine.analyze_conversation(conversation_id).await
+        } else {
+            Err(anyhow::anyhow!("Semantic engine not initialized"))
+        }
+    }
+
+    /// List all speakers
+    pub async fn list_speakers(&self) -> Result<Vec<Speaker>> {
+        if let Some(identifier) = &self.speaker_identifier {
+            identifier.list_speakers().await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Create new speaker
+    pub async fn create_speaker(&mut self, name: Option<String>) -> Result<String> {
+        if let Some(identifier) = &mut self.speaker_identifier {
+            identifier.create_speaker(name, None).await
+        } else {
+            Err(anyhow::anyhow!("Speaker identifier not initialized"))
+        }
+    }
+
+    /// Find potential speaker duplicates
+    pub async fn find_speaker_duplicates(&self) -> Result<Vec<(String, String, f32)>> {
+        if let Some(identifier) = &self.speaker_identifier {
+            identifier.find_potential_duplicates().await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Merge two speakers
+    pub async fn merge_speakers(&mut self, primary_id: &str, secondary_id: &str) -> Result<()> {
+        if let Some(identifier) = &mut self.speaker_identifier {
+            identifier.merge_speakers(primary_id, secondary_id).await
+        } else {
+            Err(anyhow::anyhow!("Speaker identifier not initialized"))
+        }
+    }
+
+    /// Get conversation topics
+    pub async fn get_conversation_topics(&self, conversation_id: &str) -> Result<Vec<Topic>> {
+        if let Some(engine) = &self.semantic_engine {
+            engine.get_conversation_topics(conversation_id).await
+        } else {
+            Ok(Vec::new())
+        }
     }
 }

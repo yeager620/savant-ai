@@ -59,6 +59,20 @@ enum Commands {
         #[arg(long, default_value = "0")]
         offset: i64,
     },
+    /// Semantic search across all conversations
+    Search {
+        /// Search query text
+        query: String,
+        /// Maximum number of results
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+        /// Minimum similarity threshold (0.0-1.0)
+        #[arg(long, default_value = "0.7")]
+        threshold: f32,
+        /// Speaker filter
+        #[arg(long)]
+        speaker: Option<String>,
+    },
     /// List conversations
     List {
         /// Limit number of conversations
@@ -84,12 +98,71 @@ enum Commands {
         #[arg(short, long)]
         context: Option<String>,
     },
+    /// Analyze conversation and extract insights
+    Analyze {
+        /// Conversation ID to analyze
+        conversation_id: String,
+    },
+    /// Speaker management commands
+    Speaker {
+        #[command(subcommand)]
+        command: SpeakerCommands,
+    },
+    /// Topic management commands
+    Topic {
+        #[command(subcommand)]
+        command: TopicCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum SpeakerCommands {
+    /// List all speakers
+    List,
+    /// Create a new speaker
+    Create {
+        /// Speaker name
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+    /// Show speaker details and statistics
+    Show {
+        /// Speaker ID
+        speaker_id: String,
+    },
+    /// Find potential duplicate speakers
+    Duplicates,
+    /// Merge two speakers
+    Merge {
+        /// Primary speaker ID (keep this one)
+        primary: String,
+        /// Secondary speaker ID (merge into primary)
+        secondary: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum TopicCommands {
+    /// List topics for a conversation
+    List {
+        /// Conversation ID
+        conversation_id: String,
+    },
+    /// Extract topics from conversation
+    Extract {
+        /// Conversation ID
+        conversation_id: String,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let db = TranscriptDatabase::new(cli.db_path).await?;
+    let mut db = TranscriptDatabase::new(cli.db_path).await?;
+    
+    // Initialize enhanced features
+    db.init_speaker_identification().await?;
+    db.init_semantic_search().await?;
 
     match cli.command {
         Commands::Store { input, conversation, title } => {
@@ -205,6 +278,182 @@ async fn main() -> Result<()> {
         Commands::Create { title, context } => {
             let conversation_id = db.create_conversation(title.as_deref(), context.as_deref()).await?;
             println!("Created conversation: {}", conversation_id);
+        }
+
+        Commands::Search { query, limit, threshold, speaker } => {
+            let results = db.semantic_search(&query, limit, threshold).await?;
+            
+            if results.is_empty() {
+                println!("No results found for query: \"{}\"", query);
+            } else {
+                println!("Found {} results for query: \"{}\"", results.len(), query);
+                println!("{}", "─".repeat(80));
+                
+                for result in results {
+                    if let Some(ref speaker_filter) = speaker {
+                        if result.speaker_id.as_ref().map_or(true, |s| s != speaker_filter) {
+                            continue;
+                        }
+                    }
+                    
+                    println!("🔍 Similarity: {:.3} | Speaker: {} | Time: {}", 
+                             result.similarity_score,
+                             result.speaker_id.unwrap_or_else(|| "Unknown".to_string()),
+                             result.timestamp.format("%Y-%m-%d %H:%M:%S"));
+                    println!("📝 Text: {}", result.text);
+                    
+                    if let Some(context) = result.context_before {
+                        println!("⬆️  Context: {}", context);
+                    }
+                    if let Some(context) = result.context_after {
+                        println!("⬇️  Context: {}", context);
+                    }
+                    
+                    println!("{}", "─".repeat(80));
+                }
+            }
+        }
+
+        Commands::Analyze { conversation_id } => {
+            let analysis = db.analyze_conversation(&conversation_id).await?;
+            
+            println!("📊 Conversation Analysis: {}", conversation_id);
+            println!("{}", "═".repeat(60));
+            println!("📝 Summary: {}", analysis.summary);
+            println!("⏱️  Duration: {:.1} seconds", analysis.duration);
+            println!("👥 Participants: {}", analysis.participant_count);
+            println!("🎯 Quality Score: {:.2}", analysis.quality_score);
+            println!("💭 Sentiment: {:.2} ({})", 
+                     analysis.sentiment_score,
+                     if analysis.sentiment_score > 0.1 { "Positive" } 
+                     else if analysis.sentiment_score < -0.1 { "Negative" } 
+                     else { "Neutral" });
+            
+            if !analysis.topics.is_empty() {
+                println!("🏷️  Topics: {}", analysis.topics.join(", "));
+            }
+            
+            if !analysis.key_phrases.is_empty() {
+                println!("🔑 Key Phrases: {}", analysis.key_phrases.join(", "));
+            }
+        }
+
+        Commands::Speaker { command } => {
+            match command {
+                SpeakerCommands::List => {
+                    let speakers = db.list_speakers().await?;
+                    
+                    if speakers.is_empty() {
+                        println!("No speakers found in database");
+                    } else {
+                        println!("{:<36} {:<20} {:<15} {:<10} {:<15}", 
+                                 "ID", "Name", "Conversations", "Time", "Last Seen");
+                        println!("{}", "─".repeat(100));
+                        
+                        for speaker in speakers {
+                            let name = speaker.display_name.or(speaker.name).unwrap_or_else(|| "Unknown".to_string());
+                            let last_seen = speaker.last_interaction
+                                .map(|dt| dt.format("%Y-%m-%d").to_string())
+                                .unwrap_or_else(|| "Never".to_string());
+                            
+                            println!("{:<36} {:<20} {:<15} {:<10.1}s {:<15}", 
+                                     speaker.id,
+                                     name,
+                                     speaker.total_conversations,
+                                     speaker.total_conversation_time,
+                                     last_seen);
+                        }
+                    }
+                }
+                
+                SpeakerCommands::Create { name } => {
+                    let speaker_id = db.create_speaker(name).await?;
+                    println!("Created speaker: {}", speaker_id);
+                }
+                
+                SpeakerCommands::Show { speaker_id } => {
+                    let speakers = db.list_speakers().await?;
+                    if let Some(speaker) = speakers.iter().find(|s| s.id == speaker_id) {
+                        println!("👤 Speaker Details");
+                        println!("{}", "═".repeat(40));
+                        println!("ID: {}", speaker.id);
+                        println!("Name: {}", speaker.display_name.as_ref().or(speaker.name.as_ref()).unwrap_or(&"Unknown".to_string()));
+                        println!("Total Conversations: {}", speaker.total_conversations);
+                        println!("Total Time: {:.1} seconds", speaker.total_conversation_time);
+                        println!("Confidence Threshold: {:.2}", speaker.confidence_threshold);
+                        if let Some(last) = speaker.last_interaction {
+                            println!("Last Interaction: {}", last.format("%Y-%m-%d %H:%M:%S"));
+                        }
+                        println!("Created: {}", speaker.created_at.format("%Y-%m-%d %H:%M:%S"));
+                    } else {
+                        println!("Speaker not found: {}", speaker_id);
+                    }
+                }
+                
+                SpeakerCommands::Duplicates => {
+                    let duplicates = db.find_speaker_duplicates().await?;
+                    
+                    if duplicates.is_empty() {
+                        println!("No potential duplicates found");
+                    } else {
+                        println!("🔍 Potential Speaker Duplicates");
+                        println!("{}", "═".repeat(60));
+                        
+                        for (speaker_a, speaker_b, similarity) in duplicates {
+                            println!("Similarity: {:.3}", similarity);
+                            println!("  Speaker A: {}", speaker_a);
+                            println!("  Speaker B: {}", speaker_b);
+                            println!("{}", "─".repeat(40));
+                        }
+                    }
+                }
+                
+                SpeakerCommands::Merge { primary, secondary } => {
+                    db.merge_speakers(&primary, &secondary).await?;
+                    println!("✅ Merged speaker {} into {}", secondary, primary);
+                }
+            }
+        }
+
+        Commands::Topic { command } => {
+            match command {
+                TopicCommands::List { conversation_id } => {
+                    let topics = db.get_conversation_topics(&conversation_id).await?;
+                    
+                    if topics.is_empty() {
+                        println!("No topics found for conversation: {}", conversation_id);
+                    } else {
+                        println!("🏷️  Topics for conversation: {}", conversation_id);
+                        println!("{}", "═".repeat(50));
+                        
+                        for topic in topics {
+                            println!("• {} (frequency: {})", topic.name, topic.frequency);
+                            if let Some(desc) = topic.description {
+                                println!("  {}", desc);
+                            }
+                        }
+                    }
+                }
+                
+                TopicCommands::Extract { conversation_id } => {
+                    if let Some(engine) = db.semantic_engine() {
+                        let topics = engine.extract_topics(&conversation_id).await?;
+                        
+                        if topics.is_empty() {
+                            println!("No topics extracted for conversation: {}", conversation_id);
+                        } else {
+                            println!("🏷️  Extracted topics for conversation: {}", conversation_id);
+                            println!("{}", "═".repeat(50));
+                            
+                            for topic in topics {
+                                println!("• {}", topic);
+                            }
+                        }
+                    } else {
+                        println!("Semantic engine not available for topic extraction");
+                    }
+                }
+            }
         }
     }
 
