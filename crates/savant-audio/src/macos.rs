@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
+use async_trait::async_trait;
 
 /// macOS system audio capture using Core Audio APIs
 pub struct MacOSSystemCapture {
@@ -20,7 +21,7 @@ impl MacOSSystemCapture {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl StreamControl for MacOSSystemCapture {
     async fn stop(&self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);

@@ -1,6 +1,7 @@
 //! Audio capture implementation using CPAL
 
 use crate::{AudioCapture, AudioConfig, AudioDevice, AudioSample, AudioStream, SampleFormat, StreamControl};
+use async_trait::async_trait;
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, Stream, StreamConfig};
@@ -75,7 +76,7 @@ impl CpalAudioCapture {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 impl AudioCapture for CpalAudioCapture {
     async fn list_devices(&self) -> Result<Vec<AudioDevice>> {
         let mut devices = Vec::new();
@@ -284,7 +285,7 @@ struct CpalStreamControl {
     running: Arc<AtomicBool>,
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 impl StreamControl for CpalStreamControl {
     async fn stop(&self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);

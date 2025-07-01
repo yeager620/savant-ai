@@ -6,6 +6,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use async_trait::async_trait;
 
 pub mod whisper;
 pub mod models;
@@ -71,7 +72,7 @@ pub struct WordTimestamp {
 }
 
 /// Speech-to-text processor trait
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 pub trait SpeechToText {
     /// Load model from path
     async fn load_model(&mut self, model_path: &str) -> Result<()>;
