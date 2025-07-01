@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use savant_audio::{create_audio_capture, AudioConfig, AudioBuffer, AudioBufferConfig};
-use savant_stt::{create_speech_to_text, SttConfig, markdown};
+use savant_stt::{create_speech_to_text_with_config, SttConfig, markdown};
 use anyhow::Result;
 use tracing_subscriber::FmtSubscriber;
 
@@ -21,6 +21,9 @@ struct Cli {
     /// Path to Whisper model
     #[arg(long, default_value = "models/ggml-base.en.bin")]
     model: String,
+    /// Language to transcribe in (e.g., "en", "zh"). Auto-detects if not specified.
+    #[arg(long)]
+    language: Option<String>,
     /// Output file (markdown). If not provided, prints to stdout
     #[arg(short, long)]
     output: Option<PathBuf>,
@@ -63,9 +66,10 @@ async fn main() -> Result<()> {
 
     let audio_sample = buffer.get_sample();
 
-    let mut stt = create_speech_to_text()?;
     let mut stt_cfg = SttConfig::default();
     stt_cfg.model_path = cli.model.clone();
+    stt_cfg.language = cli.language.clone();
+    let mut stt = create_speech_to_text_with_config(stt_cfg.clone())?;
     stt.load_model(&stt_cfg.model_path).await?;
 
     let result = stt

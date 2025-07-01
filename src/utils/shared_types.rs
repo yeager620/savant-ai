@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use leptos::prelude::ReadSignal;
 
 // Shared types between frontend and backend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,4 +57,35 @@ impl Default for LlmConfig {
             max_tokens: 500,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoundingBox {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct DetectedQuestion {
+    pub id: String,
+    pub question: String,
+    pub response: ReadSignal<String>,
+    pub confidence: f32,
+    pub bounding_box: BoundingBox,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OverlayState {
+    Hidden,
+    Visible,
+    Scanning,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingResponse {
+    pub question_id: String,
+    pub content: String,
+    pub is_complete: bool,
 }

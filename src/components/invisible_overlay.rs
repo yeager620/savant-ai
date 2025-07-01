@@ -1,39 +1,23 @@
 use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
+use leptos::task::spawn_local;
 use std::collections::HashMap;
-use wasm_bindgen::prelude::*;
 use gloo_timers::future::TimeoutFuture;
+use gloo_utils::format::JsValueSerdeExt;
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DetectedQuestion {
-    pub id: String,
-    pub text: String,
-    pub confidence: f32,
-    pub bounding_box: BoundingBox,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BoundingBox {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StreamingResponse {
-    pub question_id: String,
-    pub content: String,
-    pub is_complete: bool,
-}
+use crate::utils::shared_types::{DetectedQuestion, StreamingResponse};
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    fn invoke(cmd: &str, args: JsValue) -> js_sys::Promise;
     
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
-    async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
+    fn listen(event: &str, handler: &js_sys::Function) -> js_sys::Promise;
 }
 
 #[component]
@@ -43,7 +27,7 @@ pub fn InvisibleOverlay() -> impl IntoView {
     let (is_scanning, set_is_scanning) = signal(false);
 
     // Start continuous scanning when component mounts
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if is_scanning.get() {
             spawn_local(async move {
                 start_continuous_scanning(set_detected_questions).await;
@@ -52,16 +36,16 @@ pub fn InvisibleOverlay() -> impl IntoView {
     });
 
     // Listen for streaming responses
-    create_effect(move |_| {
+    Effect::new(move |_| {
         spawn_local(async move {
             listen_for_streaming_responses(set_streaming_responses).await;
         });
     });
 
     // Auto-start scanning
-    create_effect(move |_| {
+    Effect::new(move |_| {
         spawn_local(async move {
-            let _ = invoke("start_overlay_scanning", JsValue::NULL).await;
+            let _ = JsFuture::from(invoke("start_overlay_scanning", JsValue::NULL)).await.unwrap();
             set_is_scanning.set(true);
         });
     });
@@ -69,19 +53,17 @@ pub fn InvisibleOverlay() -> impl IntoView {
     view! {
         <div class="invisible-overlay-container">
             <For
-                each=detected_questions
+                each=move || detected_questions.get()
                 key=|q| q.id.clone()
-                children=move |question| {
-                    let question_id = question.id.clone();
-                    let response_signal = create_memo(move |_| {
-                        streaming_responses.get().get(&question_id).cloned().unwrap_or_default()
+                children=move |q: DetectedQuestion| {
+                    let response_signal = Memo::new(move |_| {
+                        q.response.get()
                     });
-                    
                     view! {
-                        <NeonQuestionBox 
-                            question=question
-                            response=response_signal.into()
-                        />
+                        <div class="question-card">
+                            <p class="question-text">{q.question.clone()}</p>
+                            <p class="response-text">{response_signal}</p>
+                        </div>
                     }
                 }
             />
@@ -90,7 +72,7 @@ pub fn InvisibleOverlay() -> impl IntoView {
 }
 
 #[component]
-fn NeonQuestionBox(
+pub fn NeonQuestionBox(
     question: DetectedQuestion,
     response: Signal<String>,
 ) -> impl IntoView {
@@ -98,7 +80,7 @@ fn NeonQuestionBox(
     let (fade_out, set_fade_out) = signal(false);
 
     // Auto-fade after response completion
-    create_effect(move |_| {
+    Effect::new(move |_| {
         let response_text = response.get();
         if !response_text.is_empty() && response_text.ends_with("[COMPLETE]") {
             set_timeout(move || {
@@ -136,20 +118,19 @@ async fn start_continuous_scanning(set_detected_questions: WriteSignal<Vec<Detec
     let args = serde_wasm_bindgen::to_value(&()).unwrap();
     
     loop {
-        if let Ok(result) = invoke("scan_for_questions", args.clone()).await {
-            if let Ok(questions) = serde_wasm_bindgen::from_value::<Vec<DetectedQuestion>>(result) {
-                if !questions.is_empty() {
-                    set_detected_questions.set(questions.clone());
-                    
-                    // Trigger AI responses for each question
-                    for question in questions {
-                        let question_text = question.text.clone();
-                        spawn_local(async move {
-                            let _ = invoke("query_question", 
-                                serde_wasm_bindgen::to_value(&question_text).unwrap()
-                            ).await;
-                        });
-                    }
+        let result = JsFuture::from(invoke("scan_for_questions", args.clone())).await.unwrap();
+        if let Ok(result) = result.into_serde::<Vec<DetectedQuestion>>() {
+            if !result.is_empty() {
+                set_detected_questions.set(result.clone());
+                
+                // Trigger AI responses for each question
+                for question in result {
+                    let question_text = question.question.clone();
+                    spawn_local(async move {
+                        let _ = JsFuture::from(invoke("query_question", 
+                            serde_wasm_bindgen::to_value(&question_text).unwrap()
+                        )).await.unwrap();
+                    });
                 }
             }
         }
@@ -167,7 +148,7 @@ async fn listen_for_streaming_responses(set_streaming_responses: WriteSignal<Has
         }
     }) as Box<dyn Fn(JsValue)>);
 
-    let _ = listen("streaming_response", handler.as_ref().unchecked_ref()).await;
+    let _ = JsFuture::from(listen("streaming_response", handler.as_ref().unchecked_ref())).await;
     handler.forget();
 }
 

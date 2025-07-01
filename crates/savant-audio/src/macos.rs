@@ -106,19 +106,7 @@ async fn check_loopback_device_available() -> Result<bool> {
     Ok(has_loopback)
 }
 
-/// Check if macOS version supports system audio capture
-fn check_macos_version() -> Result<bool> {
-    // System audio capture is available on all supported macOS versions
-    // when using a loopback device approach
-    Ok(true)
-}
 
-/// Check if audio capture permissions are granted
-async fn check_audio_permissions() -> Result<bool> {
-    // For loopback device approach, we use standard audio input permissions
-    // which are handled by CPAL
-    Ok(true)
-}
 
 /// Request audio capture permissions
 pub async fn request_audio_permissions() -> Result<bool> {
@@ -136,16 +124,7 @@ pub async fn get_core_audio_devices() -> Result<Vec<crate::AudioDevice>> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_macos_version_check() {
-        assert!(check_macos_version().is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_permission_check() {
-        let result = check_audio_permissions().await;
-        assert!(result.is_ok());
-    }
+    
 
     #[tokio::test]
     async fn test_loopback_device_check() {

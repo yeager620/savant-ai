@@ -94,6 +94,10 @@ pub fn create_speech_to_text() -> Result<Box<dyn SpeechToText>> {
     Ok(Box::new(WhisperProcessor::new()?))
 }
 
+pub fn create_speech_to_text_with_config(config: SttConfig) -> Result<Box<dyn SpeechToText>> {
+    Ok(Box::new(WhisperProcessor::with_config(config)?))
+}
+
 /// Utility functions for audio preprocessing
 pub mod audio_utils {
 
@@ -174,6 +178,41 @@ pub mod audio_utils {
             if sample.abs() < threshold {
                 *sample = 0.0;
             }
+        }
+    }
+
+    /// Post-process transcription to handle silence/unclear audio
+    pub fn post_process_transcription(text: &str) -> String {
+        // Remove repetitive "you" patterns that indicate unclear audio
+        let processed = remove_repetitive_you(text);
+        
+        // Replace remaining isolated "you" with silence indicator
+        let processed = replace_isolated_you(&processed);
+        
+        processed.trim().to_string()
+    }
+
+    /// Remove repetitive "you" patterns (3 or more consecutive)
+    fn remove_repetitive_you(text: &str) -> String {
+        use regex::Regex;
+        
+        // Match 3 or more consecutive "you" words (with optional punctuation/spaces)
+        let re = Regex::new(r"(?i)\b(you[\s,.]*)(\s*you[\s,.]*){2,}").unwrap();
+        re.replace_all(text, "[unclear audio] ").to_string()
+    }
+
+    /// Replace isolated "you" with silence indicator if it appears to be filler
+    fn replace_isolated_you(text: &str) -> String {
+        use regex::Regex;
+        
+        // Replace standalone "you" at beginning/end or surrounded by periods/silence
+        let re = Regex::new(r"(?i)(\s|^)(you)(\s*[.,]?\s*$|\s*[.,]\s*)").unwrap();
+        
+        // Only replace if the text is very short (likely just filler)
+        if text.trim().split_whitespace().count() <= 3 {
+            re.replace_all(text, "$1[no signal]$3").to_string()
+        } else {
+            text.to_string()
         }
     }
 }
@@ -268,5 +307,50 @@ pub mod markdown {
         let min = (seconds / 60.0) as u64;
         let sec = (seconds % 60.0) as u64;
         format!("{:02}:{:02}", min, sec)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::audio_utils::*;
+
+    #[test]
+    fn test_post_process_repetitive_you() {
+        // Test removing repetitive "you" patterns
+        let input = "you you you you hello world";
+        let result = post_process_transcription(input);
+        assert_eq!(result, "[unclear audio] hello world");
+    }
+
+    #[test]
+    fn test_post_process_isolated_you() {
+        // Test replacing isolated "you" in short text
+        let input = "you";
+        let result = post_process_transcription(input);
+        assert_eq!(result, "[no signal]");
+    }
+
+    #[test]
+    fn test_post_process_you_with_punctuation() {
+        // Test handling "you" with punctuation
+        let input = "you, you, you.";
+        let result = post_process_transcription(input);
+        assert_eq!(result, "[unclear audio]");
+    }
+
+    #[test]
+    fn test_post_process_preserve_valid_you() {
+        // Test that valid "you" in longer sentences is preserved
+        let input = "Hello, how are you doing today?";
+        let result = post_process_transcription(input);
+        assert_eq!(result, "Hello, how are you doing today?");
+    }
+
+    #[test]
+    fn test_post_process_mixed_case() {
+        // Test case insensitive matching
+        let input = "You YOU you You";
+        let result = post_process_transcription(input);
+        assert_eq!(result, "[unclear audio]");
     }
 }

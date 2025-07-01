@@ -1,5 +1,5 @@
 mod llm;
-mod shared_types;
+pub mod shared_types;
 mod ocr;
 
 // Shared types for frontend components

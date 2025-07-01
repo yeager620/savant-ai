@@ -182,10 +182,21 @@ impl WhisperProcessor {
             }
         }
 
+        // Post-process the text to handle "you" repetition and unclear audio
+        let processed_text = crate::audio_utils::post_process_transcription(&full_text);
+        
+        // Also post-process individual segments
+        let processed_segments: Vec<_> = segments.into_iter()
+            .map(|mut segment| {
+                segment.text = crate::audio_utils::post_process_transcription(&segment.text);
+                segment
+            })
+            .collect();
+
         Ok(TranscriptionResult {
-            text: full_text.trim().to_string(),
+            text: processed_text,
             language: self.config.language.clone(),
-            segments,
+            segments: processed_segments,
             processing_time_ms: processing_time,
             model_used: self.config.model_path.clone(),
         })
@@ -212,9 +223,7 @@ fn load_audio_file(file_path: &str) -> Result<AudioSample> {
 
     Ok(AudioSample {
         data: samples,
-        timestamp: chrono::Utc::now(),
         sample_rate: spec.sample_rate,
-        channels: spec.channels,
     })
 }
 
@@ -222,7 +231,5 @@ fn load_audio_file(file_path: &str) -> Result<AudioSample> {
 #[derive(Debug, Clone)]
 struct AudioSample {
     data: Vec<f32>,
-    timestamp: chrono::DateTime<chrono::Utc>,
     sample_rate: u32,
-    channels: u16,
 }

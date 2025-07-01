@@ -6,6 +6,7 @@
 .vscode
 
 CLAUDE.md
+.gemini/
 
 models/ggml-base.en.bin
 
