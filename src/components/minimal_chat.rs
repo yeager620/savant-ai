@@ -86,114 +86,82 @@ pub fn MinimalChat() -> impl IntoView {
         setup_prompt_selection_listener(set_input_text_listener).await;
     });
 
-    let send_message = move |_: web_sys::MouseEvent| {
-        let text = input_text.get().trim().to_string();
-        if text.is_empty() || is_streaming.get() {
-            return;
-        }
-
-        // Add user message
-        let user_message = ChatMessage {
-            content: text.clone(),
-            is_user: true,
-            timestamp: get_current_time(),
-        };
+    // Common message sending logic
+    let send_message_impl = {
+        let messages = messages.clone();
+        let set_messages = set_messages.clone();
+        let set_input_text = set_input_text.clone();
+        let set_is_streaming = set_is_streaming.clone();
+        let set_streaming_content = set_streaming_content.clone();
+        let input_text = input_text.clone();
         
-        // Clone user message for history before it's moved
-        let user_message_for_history = user_message.clone();
-        
-        set_messages.update(|msgs| {
-            msgs.push(user_message);
-            // Save chat history after adding user message
-            let messages_to_save = msgs.clone();
-            spawn_local(async move {
-                if let Err(e) = save_chat_history(&messages_to_save).await {
-                    console::log_1(&format!("Failed to save chat history after user message: {}", e).into());
-                }
-            });
-        });
-        set_input_text.set(String::new());
-        set_is_streaming.set(true);
-        set_streaming_content.set(String::new());
-
-        // Build conversation messages including the new user message
-        let current_messages = messages.get();
-        let mut all_messages = current_messages;
-        all_messages.push(user_message_for_history);
-        
-        spawn_local(async move {
-            // Start streaming request
-            match send_to_ollama_streaming(text, all_messages).await {
-                Ok(_) => {
-                    // Streaming started successfully - UI already set up
-                }
-                Err(err) => {
-                    let error_message = ChatMessage {
-                        content: format!("Error: {}", err),
-                        is_user: false,
-                        timestamp: get_current_time(),
-                    };
-                    set_messages.update(|msgs| msgs.push(error_message));
-                    set_is_streaming.set(false);
-                    set_streaming_content.set(String::new());
-                }
-            }
-        });
-    };
-
-    let handle_keypress = move |ev: web_sys::KeyboardEvent| {
-        if ev.key() == "Enter" && !ev.shift_key() {
-            ev.prevent_default();
-            // Trigger send by creating a synthetic mouse event
+        move || {
             let text = input_text.get().trim().to_string();
-            if !text.is_empty() && !is_streaming.get() {
-                // Add user message
-                let user_message = ChatMessage {
-                    content: text.clone(),
-                    is_user: true,
-                    timestamp: get_current_time(),
-                };
-                
-                // Clone user message for history before it's moved
-                let user_message_for_history = user_message.clone();
-                
-                set_messages.update(|msgs| {
-                    msgs.push(user_message);
-                    // Save chat history after adding user message
-                    let messages_to_save = msgs.clone();
-                    spawn_local(async move {
-                        if let Err(e) = save_chat_history(&messages_to_save).await {
-                            console::log_1(&format!("Failed to save chat history after user message: {}", e).into());
-                        }
-                    });
-                });
-                set_input_text.set(String::new());
-                set_is_streaming.set(true);
-                set_streaming_content.set(String::new());
+            if text.is_empty() || is_streaming.get() {
+                return;
+            }
 
-                // Build conversation messages including the new user message
-                let current_messages = messages.get();
-                let mut all_messages = current_messages;
-                all_messages.push(user_message_for_history);
-                
+            // Add user message
+            let user_message = ChatMessage {
+                content: text.clone(),
+                is_user: true,
+                timestamp: get_current_time(),
+            };
+            
+            // Clone user message for history before it's moved
+            let user_message_for_history = user_message.clone();
+            
+            set_messages.update(|msgs| {
+                msgs.push(user_message);
+                // Save chat history after adding user message
+                let messages_to_save = msgs.clone();
                 spawn_local(async move {
-                    // Start streaming request
-                    match send_to_ollama_streaming(text, all_messages).await {
-                        Ok(_) => {
-                            // Streaming started successfully - UI already set up
-                        }
-                        Err(err) => {
-                            let error_message = ChatMessage {
-                                content: format!("Error: {}", err),
-                                is_user: false,
-                                timestamp: get_current_time(),
-                            };
-                            set_messages.update(|msgs| msgs.push(error_message));
-                            set_is_streaming.set(false);
-                            set_streaming_content.set(String::new());
-                        }
+                    if let Err(e) = save_chat_history(&messages_to_save).await {
+                        console::log_1(&format!("Failed to save chat history after user message: {}", e).into());
                     }
                 });
+            });
+            set_input_text.set(String::new());
+            set_is_streaming.set(true);
+            set_streaming_content.set(String::new());
+
+            // Get the current messages (which already includes the user message we just added)
+            let all_messages = messages.get();
+            
+            spawn_local(async move {
+                // Start streaming request
+                match send_to_ollama_streaming(text, all_messages).await {
+                    Ok(_) => {
+                        // Streaming started successfully - UI already set up
+                    }
+                    Err(err) => {
+                        let error_message = ChatMessage {
+                            content: format!("Error: {}", err),
+                            is_user: false,
+                            timestamp: get_current_time(),
+                        };
+                        set_messages.update(|msgs| msgs.push(error_message));
+                        set_is_streaming.set(false);
+                        set_streaming_content.set(String::new());
+                    }
+                }
+            });
+        }
+    };
+
+    let send_message = {
+        let send_impl = send_message_impl.clone();
+        move |_: web_sys::MouseEvent| {
+            send_impl();
+        }
+    };
+
+    let handle_keypress = {
+        let send_impl = send_message_impl.clone();
+        move |ev: web_sys::KeyboardEvent| {
+            if ev.key() == "Enter" && !ev.shift_key() {
+                ev.prevent_default();
+                send_impl();
             }
         }
     };

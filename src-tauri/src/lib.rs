@@ -1,7 +1,11 @@
 mod commands;
 
 use commands::*;
+use reqwest::Client;
+use std::process::Command;
+use std::time::Duration;
 use tauri::{Manager, menu::{MenuBuilder, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton}};
+use tokio::time::timeout;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -111,6 +115,11 @@ pub fn run() {
                 }
             });
             
+            // Check and start Ollama if needed
+            tauri::async_runtime::spawn(async move {
+                ensure_ollama_running().await;
+            });
+            
             // Hide from dock and make main window invisible to screen capture
             #[cfg(target_os = "macos")]
             {
@@ -157,4 +166,123 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+async fn ensure_ollama_running() {
+    println!("Checking if Ollama is running...");
+    
+    // First check if Ollama is already running
+    if is_ollama_running().await {
+        println!("Ollama is already running");
+        return;
+    }
+    
+    println!("Ollama is not running, attempting to start it...");
+    
+    // Try to start Ollama
+    #[cfg(target_os = "macos")]
+    {
+        // Try different ways to start Ollama on macOS
+        let start_commands = [
+            // Direct binary call
+            "ollama serve",
+            // Using launchctl if it's installed as a service
+            "launchctl kickstart -k gui/$(id -u)/com.ollama.ollama",
+            // Using brew services
+            "brew services start ollama",
+        ];
+        
+        for cmd in &start_commands {
+            println!("Trying to start Ollama with: {}", cmd);
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(cmd);
+            
+            match command.spawn() {
+                Ok(mut child) => {
+                    // Give it a moment to start
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    
+                    // Check if Ollama is now running
+                    if is_ollama_running().await {
+                        println!("Successfully started Ollama with: {}", cmd);
+                        return;
+                    }
+                    
+                    // Kill the process if it didn't work
+                    let _ = child.kill();
+                }
+                Err(e) => {
+                    println!("Failed to execute {}: {}", cmd, e);
+                }
+            }
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Try to start Ollama on Windows
+        let start_commands = [
+            "ollama serve",
+            "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Ollama\\ollama.exe serve",
+        ];
+        
+        for cmd in &start_commands {
+            println!("Trying to start Ollama with: {}", cmd);
+            let mut command = Command::new("cmd");
+            command.arg("/C").arg(cmd);
+            
+            match command.spawn() {
+                Ok(_) => {
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    if is_ollama_running().await {
+                        println!("Successfully started Ollama with: {}", cmd);
+                        return;
+                    }
+                }
+                Err(e) => {
+                    println!("Failed to execute {}: {}", cmd, e);
+                }
+            }
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Try to start Ollama on Linux
+        let start_commands = [
+            "ollama serve",
+            "systemctl --user start ollama",
+            "/usr/local/bin/ollama serve",
+        ];
+        
+        for cmd in &start_commands {
+            println!("Trying to start Ollama with: {}", cmd);
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(cmd);
+            
+            match command.spawn() {
+                Ok(_) => {
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    if is_ollama_running().await {
+                        println!("Successfully started Ollama with: {}", cmd);
+                        return;
+                    }
+                }
+                Err(e) => {
+                    println!("Failed to execute {}: {}", cmd, e);
+                }
+            }
+        }
+    }
+    
+    println!("Could not start Ollama automatically. Please start it manually with 'ollama serve'");
+}
+
+async fn is_ollama_running() -> bool {
+    let client = Client::new();
+    
+    match timeout(Duration::from_secs(5), client.get("http://localhost:11434/api/tags").send()).await {
+        Ok(Ok(response)) => response.status().is_success(),
+        _ => false,
+    }
 }
