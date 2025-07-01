@@ -19,4 +19,20 @@ serde-wasm-bindgen = "0.6"
 pulldown-cmark = "0.12"
 
 [workspace]
-members = ["src-tauri"]
+members = [
+    "src-tauri",
+    "crates/savant-core",
+    "crates/savant-llm"
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Shared dependencies across all crates
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4"] }

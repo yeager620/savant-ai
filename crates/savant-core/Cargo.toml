@@ -1,0 +1,13 @@
+[package]
+name = "savant-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core shared types and utilities for Savant AI components"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+dirs = "5.0"
