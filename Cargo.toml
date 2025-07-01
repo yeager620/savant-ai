@@ -22,7 +22,10 @@ pulldown-cmark = "0.12"
 members = [
     "src-tauri",
     "crates/savant-core",
-    "crates/savant-llm"
+    "crates/savant-llm",
+    "crates/savant-audio",
+    "crates/savant-stt",
+    "crates/savant-transcribe"
 ]
 resolver = "2"
 

@@ -4,7 +4,7 @@ use crate::{SpeechToText, SttConfig, TranscriptionResult, TranscriptionSegment, 
 use anyhow::{anyhow, Result};
 use std::time::Instant;
 use tracing::{debug, info, warn};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState, WhisperContextParameters};
 
 pub struct WhisperProcessor {
     context: Option<WhisperContext>,
@@ -54,79 +54,9 @@ impl WhisperProcessor {
         params
     }
 
-    /// Extract transcription results from Whisper context
-    fn extract_results(&self, ctx: &WhisperContext, processing_time: u64) -> Result<TranscriptionResult> {
-        let num_segments = ctx.full_n_segments()?;
-        let mut segments = Vec::new();
-        let mut full_text = String::new();
-
-        for i in 0..num_segments {
-            let text = ctx.full_get_segment_text(i)?;
-            let start_time = ctx.full_get_segment_t0(i)? as f64 / 100.0; // Convert from centiseconds
-            let end_time = ctx.full_get_segment_t1(i)? as f64 / 100.0;
-
-            // Extract word-level timestamps if enabled
-            let words = if self.config.enable_word_timestamps {
-                let num_tokens = ctx.full_n_tokens(i)?;
-                let mut word_timestamps = Vec::new();
-
-                for j in 0..num_tokens {
-                    if let Ok(token_text) = ctx.full_get_token_text(i, j) {
-                        if let (Ok(token_start), Ok(token_end)) = (
-                            ctx.full_get_token_t0(i, j),
-                            ctx.full_get_token_t1(i, j),
-                        ) {
-                            // Skip special tokens
-                            if !token_text.trim().is_empty() && !token_text.starts_with('<') {
-                                word_timestamps.push(WordTimestamp {
-                                    word: token_text,
-                                    start_time: token_start as f64 / 100.0,
-                                    end_time: token_end as f64 / 100.0,
-                                    confidence: None, // Whisper doesn't provide token-level confidence
-                                });
-                            }
-                        }
-                    }
-                }
-
-                Some(word_timestamps)
-            } else {
-                None
-            };
-
-            segments.push(TranscriptionSegment {
-                text: text.clone(),
-                start_time,
-                end_time,
-                confidence: None, // Whisper doesn't provide segment-level confidence
-                words,
-            });
-
-            full_text.push_str(&text);
-            if i < num_segments - 1 {
-                full_text.push(' ');
-            }
-        }
-
-        // Detect language if not specified
-        let detected_language = if self.config.language.is_none() {
-            // Whisper can auto-detect language, but we'd need to access that info
-            None
-        } else {
-            self.config.language.clone()
-        };
-
-        Ok(TranscriptionResult {
-            text: full_text.trim().to_string(),
-            language: detected_language,
-            segments,
-            processing_time_ms: processing_time,
-            model_used: self.config.model_path.clone(),
-        })
-    }
 }
 
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 impl SpeechToText for WhisperProcessor {
     async fn load_model(&mut self, model_path: &str) -> Result<()> {
         info!("Loading Whisper model from: {}", model_path);
@@ -135,7 +65,8 @@ impl SpeechToText for WhisperProcessor {
             return Err(anyhow!("Model file not found: {}", model_path));
         }
 
-        let ctx = WhisperContext::new(model_path)
+        let params = WhisperContextParameters::default();
+        let ctx = WhisperContext::new_with_params(model_path, params)
             .map_err(|e| anyhow!("Failed to load Whisper model: {}", e))?;
 
         self.context = Some(ctx);
@@ -234,32 +165,7 @@ impl WhisperProcessor {
             let end_time = state.full_get_segment_t1(i)? as f64 / 100.0;
 
             // Extract word-level timestamps if enabled
-            let words = if self.config.enable_word_timestamps {
-                let num_tokens = state.full_n_tokens(i)?;
-                let mut word_timestamps = Vec::new();
-
-                for j in 0..num_tokens {
-                    if let Ok(token_text) = state.full_get_token_text(i, j) {
-                        if let (Ok(token_start), Ok(token_end)) = (
-                            state.full_get_token_t0(i, j),
-                            state.full_get_token_t1(i, j),
-                        ) {
-                            if !token_text.trim().is_empty() && !token_text.starts_with('<') {
-                                word_timestamps.push(WordTimestamp {
-                                    word: token_text,
-                                    start_time: token_start as f64 / 100.0,
-                                    end_time: token_end as f64 / 100.0,
-                                    confidence: None,
-                                });
-                            }
-                        }
-                    }
-                }
-
-                Some(word_timestamps)
-            } else {
-                None
-            };
+            let words = None;
 
             segments.push(TranscriptionSegment {
                 text: text.clone(),

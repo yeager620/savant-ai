@@ -13,11 +13,13 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 tracing = "0.1"
+async-trait = "0.1"
+hound = "3.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # macOS-specific dependencies for system audio capture
 core-foundation = "0.9"
-core-audio = "0.11"
+coreaudio-rs = "0.13"
 
 [features]
 default = ["system-audio"]
