@@ -15,7 +15,7 @@ This document explains how to set up automated system audio capture that "eavesd
 
 ### Option 1: One-Command Setup
 ```bash
-./auto-setup-system-audio.sh
+./scripts/setup/auto-setup-system-audio.sh
 ```
 
 This script automatically:
@@ -27,22 +27,22 @@ This script automatically:
 ### Option 2: Manual Control
 ```bash
 # Check status
-./savant-audio-control.sh status
+./scripts/audio/savant-audio-control.sh status
 
 # Run setup
-./savant-audio-control.sh setup
+./scripts/audio/savant-audio-control.sh setup
 
 # Start background capture
-./savant-audio-control.sh start
+./scripts/audio/savant-audio-control.sh start
 
 # Stop capture
-./savant-audio-control.sh stop
+./scripts/audio/savant-audio-control.sh stop
 
 # View live activity
-./savant-audio-control.sh logs
+./scripts/audio/savant-audio-control.sh logs
 
 # Search transcripts
-./savant-audio-control.sh search "meeting"
+./scripts/audio/savant-audio-control.sh search "meeting"
 ```
 
 ## 🔧 How It Works
@@ -65,9 +65,9 @@ Microphone → Apps (normal usage)
 
 ## 📁 File Locations
 
-- **Captures**: `~/savant-audio-captures/*.md`
-- **Logs**: `~/savant-audio-daemon.log`
-- **Daemon Script**: `~/savant-audio-daemon.sh`
+- **Captures**: `~/Documents/savant-ai/data/audio-captures/*.md`
+- **Logs**: `~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log`
+- **Daemon Script**: `~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh`
 - **Service**: `~/Library/LaunchAgents/com.savant.audio.daemon.plist`
 
 ## 🎮 Daemon Management Commands
@@ -92,13 +92,13 @@ launchctl print gui/$(id -u)/com.savant.audio.daemon
 ### Log Commands
 ```bash
 # View recent logs (last 20 lines)
-tail -20 ~/savant-audio-daemon.log
+tail -20 ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 
 # Follow logs in real-time (Ctrl+C to stop)
-tail -f ~/savant-audio-daemon.log
+tail -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 
 # View all logs
-cat ~/savant-audio-daemon.log
+cat ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 
 # View error logs
 cat ~/savant-audio-daemon.err
@@ -107,34 +107,34 @@ cat ~/savant-audio-daemon.err
 cat ~/savant-audio-daemon.out
 
 # Clear logs
-> ~/savant-audio-daemon.log
+> ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 ```
 
 ### Monitoring Commands
 ```bash
 # Check capture directory
-ls -la ~/savant-audio-captures/
+ls -la ~/Documents/savant-ai/data/audio-captures/
 
 # Count capture files
-ls ~/savant-audio-captures/ | wc -l
+ls ~/Documents/savant-ai/data/audio-captures/ | wc -l
 
 # Check latest capture file
-ls -t ~/savant-audio-captures/ | head -1
+ls -t ~/Documents/savant-ai/data/audio-captures/ | head -1
 
 # View recent capture content
-tail ~/savant-audio-captures/$(ls -t ~/savant-audio-captures/ | head -1)
+tail ~/Documents/savant-ai/data/audio-captures/$(ls -t ~/Documents/savant-ai/data/audio-captures/ | head -1)
 ```
 
 ### Debugging Commands
 ```bash
 # Test the script manually (single run)
-bash ~/savant-audio-daemon.sh
+bash ~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh
 
 # Check daemon process
 ps aux | grep savant-audio-daemon
 
 # Check system audio devices
-./audio-devices.sh
+./scripts/audio/audio-devices.sh
 
 # Test cargo command directly
 cargo run --package savant-transcribe -- --duration 10 --system --output test.md
@@ -143,16 +143,16 @@ cargo run --package savant-transcribe -- --duration 10 --system --output test.md
 ### Control Script (Alternative)
 ```bash
 # Start daemon
-./savant-audio-control.sh start
+./scripts/audio/savant-audio-control.sh start
 
 # Stop daemon  
-./savant-audio-control.sh stop
+./scripts/audio/savant-audio-control.sh stop
 
 # Check status
-./savant-audio-control.sh status
+./scripts/audio/savant-audio-control.sh status
 
 # View logs
-./savant-audio-control.sh logs
+./scripts/audio/savant-audio-control.sh logs
 ```
 
 ## 🎮 Usage Examples
@@ -160,18 +160,18 @@ cargo run --package savant-transcribe -- --duration 10 --system --output test.md
 ### Find Specific Content
 ```bash
 # Search for meetings
-./savant-audio-control.sh search "meeting"
+./scripts/audio/savant-audio-control.sh search "meeting"
 
 # Search for music
-./savant-audio-control.sh search "song\|music\|artist"
+./scripts/audio/savant-audio-control.sh search "song\|music\|artist"
 
 # Search case-insensitive
-./savant-audio-control.sh search "zoom\|teams\|call"
+./scripts/audio/savant-audio-control.sh search "zoom\|teams\|call"
 ```
 
 ### List All Captures
 ```bash
-./savant-audio-control.sh list
+./scripts/audio/savant-audio-control.sh list
 ```
 
 ## 🔍 What Gets Captured
@@ -211,7 +211,7 @@ Each capture creates a timestamped markdown file:
 ## ⚙️ Configuration
 
 ### Capture Settings
-The daemon captures in 5-minute segments by default. Edit `~/savant-audio-daemon.sh` to customize:
+The daemon captures in 5-minute segments by default. Edit `~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh` to customize:
 
 ```bash
 SEGMENT_DURATION=300  # 5 minutes (change as needed)
@@ -252,19 +252,19 @@ CAPTURE_DIR="$HOME/savant-audio-captures"  # Output directory
 # Reinstall BlackHole
 brew uninstall blackhole-2ch
 brew install blackhole-2ch
-./auto-setup-system-audio.sh
+./scripts/setup/auto-setup-system-audio.sh
 ```
 
 #### "No audio capture"
 ```bash
 # Check device list
-./audio-devices.sh
+./scripts/audio/audio-devices.sh
 
 # Verify BlackHole is available
-./savant-audio-control.sh status
+./scripts/audio/savant-audio-control.sh status
 
 # Check daemon logs
-./savant-audio-control.sh logs
+./scripts/audio/savant-audio-control.sh logs
 ```
 
 #### "Daemon won't start"
@@ -280,7 +280,7 @@ launchctl load ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 launchctl print gui/$(id -u)/com.savant.audio.daemon
 
 # Alternative restart using control script
-./savant-audio-control.sh restart
+./scripts/audio/savant-audio-control.sh restart
 ```
 
 #### "No transcripts generated"
@@ -300,19 +300,19 @@ launchctl unload ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 rm ~/Library/LaunchAgents/com.savant.audio.daemon.plist
 
 # Remove daemon script and logs
-rm ~/savant-audio-daemon.sh
-rm ~/savant-audio-daemon.log
+rm ~/Documents/savant-ai/scripts/audio/savant-audio-daemon.sh
+rm ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 rm ~/savant-audio-daemon.err
 rm ~/savant-audio-daemon.out
 
 # Clear captures (optional)
-rm -rf ~/savant-audio-captures/
+rm -rf ~/Documents/savant-ai/data/audio-captures/
 
 # Uninstall BlackHole
 brew uninstall blackhole-2ch
 
 # Re-run setup
-./auto-setup-system-audio.sh
+./scripts/setup/auto-setup-system-audio.sh
 ```
 
 ## 🚨 Important Notes
@@ -348,22 +348,22 @@ done
 ### Custom Search Scripts
 ```bash
 # Find all mentions of specific people
-grep -r -i "john\|sarah\|mike" ~/savant-audio-captures/
+grep -r -i "john\|sarah\|mike" ~/Documents/savant-ai/data/audio-captures/
 
 # Find calls longer than 30 minutes
-find ~/savant-audio-captures/ -name "*.md" -exec grep -l "30:" {} \;
+find ~/Documents/savant-ai/data/audio-captures/ -name "*.md" -exec grep -l "30:" {} \;
 
 # Extract action items
-grep -r -i "todo\|action\|follow.up" ~/savant-audio-captures/
+grep -r -i "todo\|action\|follow.up" ~/Documents/savant-ai/data/audio-captures/
 ```
 
 ### Integration with Other Tools
 ```bash
 # Convert to PDF
-pandoc ~/savant-audio-captures/meeting.md -o meeting.pdf
+pandoc ~/Documents/savant-ai/data/audio-captures/meeting.md -o meeting.pdf
 
 # Upload to cloud (after review)
-cp ~/savant-audio-captures/*.md ~/Dropbox/transcripts/
+cp ~/Documents/savant-ai/data/audio-captures/*.md ~/Dropbox/transcripts/
 
 # Search with Spotlight
 mdfind "kind:text AND (meeting OR call)"
@@ -373,14 +373,14 @@ mdfind "kind:text AND (meeting OR call)"
 
 If you encounter issues:
 
-1. **Check Status**: `./savant-audio-control.sh status`
-2. **View Logs**: `./savant-audio-control.sh logs`
-3. **List Devices**: `./audio-devices.sh`
-4. **Restart Daemon**: `./savant-audio-control.sh restart`
+1. **Check Status**: `./scripts/audio/savant-audio-control.sh status`
+2. **View Logs**: `./scripts/audio/savant-audio-control.sh logs`
+3. **List Devices**: `./scripts/audio/audio-devices.sh`
+4. **Restart Daemon**: `./scripts/audio/savant-audio-control.sh restart`
 
 For persistent issues, check the daemon log file:
 ```bash
-tail -f ~/savant-audio-daemon.log
+tail -f ~/Documents/savant-ai/data/daemon-logs/savant-audio-daemon.log
 ```
 
 ## 🔮 Future Enhancements
