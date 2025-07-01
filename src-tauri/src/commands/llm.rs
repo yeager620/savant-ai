@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
 use tauri::{AppHandle, Emitter};
-use crate::commands::ocr::DetectedQuestion;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
@@ -378,12 +377,8 @@ pub struct ConversationState {
 }
 
 #[tauri::command]
-pub async fn stream_response_for_question(app: AppHandle, question: DetectedQuestion) -> Result<(), String> {
+pub async fn stream_response_for_question(app: AppHandle, question_id: String, prompt: String) -> Result<(), String> {
     let config = LlmConfig::default(); // TODO: Get from actual config
-    
-    // Start streaming response
-    let question_id = question.id.clone();
-    let prompt = question.text.clone();
     
     if config.use_local {
         stream_ollama_response(app, question_id, prompt, config).await
@@ -618,31 +613,6 @@ pub async fn query_ollama_streaming_simple(app: AppHandle, model: String, prompt
     Ok(())
 }
 
-// Parse conversation history string into structured messages
-fn parse_conversation_to_messages(conversation_history: &str) -> Vec<OllamaChatMessage> {
-    let mut messages = Vec::new();
-    
-    for line in conversation_history.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        
-        if let Some(user_content) = line.strip_prefix("User: ") {
-            messages.push(OllamaChatMessage {
-                role: "user".to_string(),
-                content: user_content.to_string(),
-            });
-        } else if let Some(ai_content) = line.strip_prefix("AI: ") {
-            messages.push(OllamaChatMessage {
-                role: "assistant".to_string(),
-                content: ai_content.to_string(),
-            });
-        }
-    }
-    
-    messages
-}
 
 // Truncate messages to fit within context window, preserving message boundaries
 fn truncate_messages_for_context(messages: &[OllamaChatMessage], new_prompt: &str, max_tokens: u32) -> (Vec<OllamaChatMessage>, bool) {

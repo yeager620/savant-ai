@@ -1,89 +1,72 @@
-# Savant AI - Intelligent Screen Assistant
+# Savant AI - Intelligent Assistant with Browser Monitoring
 
-A completely invisible AI assistant that detects questions on your screen and provides instant answers through elegant neon overlays. Features perfect conversation memory, multi-provider AI support, and stealth operation.
+A stealth AI assistant that provides intelligent chat capabilities and browser monitoring to detect questions in web content and provide instant answers.
 
 ## **Core Features**
 
-### **🕶️ Complete Invisibility**
-- No visible UI during normal operation
-- Hidden from screenshots and screen recordings
-- Click-through transparent overlays
+### **🕶️ Stealth Operation**
+- Hidden from screenshots and screen recordings  
 - System tray background operation
+- macOS-native window transparency and invisibility
+- No visible UI during normal operation
 
-### **🧠 Intelligent Question Detection**
-- Real-time OCR screen scanning
-- Smart pattern recognition for question identification
-- Precise bounding box highlighting with neon green borders
-- Continuous monitoring with minimal performance impact
+### **🧠 Intelligent Chat Assistant**
+- Local LLM integration via Ollama
+- Perfect conversation memory with persistent chat history
+- Real-time response streaming
+- Context-aware conversation management
 
-### **💬 Perfect Conversation Memory**
-- **NEW**: Structured message architecture for persistent chat history
-- Full conversation context sent to LLM with every request
-- Automatic chat history persistence across app restarts
-- Clear history button for user control
+### **🌐 Browser Content Monitoring**
+- Detects running Chrome/Chromium browsers using Accessibility APIs
+- Parses tab content to identify potential prompts and questions
+- Ranks prompts by relevance and active tab context
+- Seamless integration with chat assistant for answering detected questions
 
 ### **🤖 Multi-Provider AI Support**
-- **Ollama**: Local inference (privacy-focused)
-- **OpenAI**: GPT-3.5/4 integration
-- **DeepSeek**: Cost-effective cloud inference
-- **Anthropic**: Claude models with structured responses
-
-### **⚡ Real-time Response Streaming**
-- Live AI text appearing character by character
-- Neon green responses positioned below detected questions
-- Auto-fade after completion
-- Context-aware truncation for large conversations
+- **Ollama**: Local inference (primary provider)
+- **OpenAI**: GPT integration
+- **DeepSeek**: Cost-effective cloud inference  
+- **Anthropic**: Claude models
 
 ## **How It Works**
 
 ```mermaid
 graph LR
-    A[Screen Content] --> B[OCR Scanner]
-    B --> C[Question Detection]
-    C --> D[Neon Highlight]
-    C --> E[AI Processing]
-    E --> F[Stream Response]
-    F --> G[Auto-fade]
-    
-    H[Chat History] --> E
-    E --> I[Save Messages]
-    I --> H
+    A[Browser Tabs] --> B[Accessibility APIs]
+    B --> C[Content Parsing]
+    C --> D[Question Detection]
+    D --> E[Prompt Ranking]
+    E --> F[Display in UI]
+    F --> G[User Selection]
+    G --> H[Local LLM]
+    H --> I[Streamed Response]
     
     style D fill:#00ff41
-    style F fill:#00ff41
     style H fill:#4169e1
+    style I fill:#00ff41
 ```
 
-## **Conversation Memory Architecture**
-
-The app now uses a **structured message system** for perfect conversation memory:
+## **Browser Monitoring Architecture**
 
 ```mermaid
 sequenceDiagram
-    participant UI as Frontend
-    participant HIST as Chat History
-    participant LLM as AI Provider
+    participant UI as Taskbar App
+    participant MON as Browser Monitor
+    participant ACC as Accessibility APIs
+    participant LLM as Ollama
     
-    UI->>HIST: Load previous messages
-    HIST-->>UI: Return chat history
+    UI->>MON: Start browser monitoring
+    MON->>ACC: Scan running browsers
+    ACC-->>MON: Return browser windows
+    MON->>ACC: Get active tab content
+    ACC-->>MON: Tab text content
+    MON->>MON: Detect & rank prompts
+    MON-->>UI: Update prompt list
     
-    Note over UI: User asks question
-    UI->>UI: Add user message to history
-    UI->>HIST: Save updated history
-    UI->>LLM: Send complete message array
-    
-    Note over LLM: [{"role": "user", "content": "..."}, <br/>{"role": "assistant", "content": "..."}, <br/>{"role": "user", "content": "new question"}]
-    
-    LLM-->>UI: Stream AI response
-    UI->>UI: Add AI response to history
-    UI->>HIST: Save final conversation
+    Note over UI: User selects prompt
+    UI->>LLM: Send selected prompt
+    LLM-->>UI: Stream response
 ```
-
-### **Key Improvements**
-- **Structured Messages**: Eliminates string parsing errors that caused memory loss
-- **Immediate Persistence**: Every message saves instantly to `~/.config/savant-ai/chat_history.json`
-- **Context Window Management**: Smart truncation preserves recent conversation context
-- **Single Event Handling**: Prevents duplicate responses from multiple listeners
 
 ## **Global Hotkeys**
 
@@ -101,12 +84,10 @@ sequenceDiagram
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 npm install -g trunk
 
-# macOS: Install Tesseract OCR
-brew install tesseract
-
-# Optional: Setup local AI with Ollama
+# Install local AI with Ollama
 brew install ollama
 ollama pull devstral  # or your preferred model
+ollama serve  # Start Ollama service
 ```
 
 ### **Development**
@@ -118,8 +99,8 @@ cd savant-ai
 # Start development server (frontend + backend)
 cargo tauri dev
 
-# Frontend-only development
-trunk serve  # Opens dashboard at localhost:1420
+# Frontend-only development  
+trunk serve  # Opens at localhost:1420
 ```
 
 ### **Building**
@@ -129,12 +110,11 @@ cargo tauri build --debug
 
 # Release build for distribution
 cargo tauri build --release
-# Creates: target/release/bundle/macos/savant-ai.app
 ```
 
 ## **Configuration**
 
-The app stores settings in `~/.config/savant-ai/config.toml`:
+Settings stored in `~/.config/savant-ai/config.toml`:
 
 ```toml
 [ai_providers]
@@ -142,20 +122,15 @@ default_provider = "ollama"
 ollama_endpoint = "http://localhost:11434"
 openai_api_key = ""
 deepseek_api_key = ""
-anthropic_api_key = ""
 
 [stealth_settings]
 stealth_mode_enabled = true
 window_transparency = 0.9
 always_on_top = true
 
-[detection_settings]
-ocr_scan_interval_ms = 500
-question_confidence_threshold = 0.7
-
 [hotkeys]
 toggle_overlay = "CommandOrControl+Shift+A"
-screenshot_analyze = "CommandOrControl+Shift+S"
+screenshot_analyze = "CommandOrControl+Shift+S" 
 show_dashboard = "CommandOrControl+Shift+D"
 ```
 
@@ -164,25 +139,40 @@ show_dashboard = "CommandOrControl+Shift+D"
 ### **Frontend (Leptos 0.7 WASM)**
 ```
 src/
-├── app.rs                    # Main application router
+├── taskbar_app.rs           # Main minimalistic sidebar UI
 ├── components/
-│   ├── minimal_chat.rs       # Chat interface with memory
-│   ├── dashboard.rs          # Configuration panel
-│   └── overlay.rs            # Invisible question detection
-└── utils/                    # Frontend utilities
+│   └── minimal_chat.rs      # Chat interface with browser toggle
+└── utils/                   # Frontend utilities
 ```
 
 ### **Backend (Tauri 2.0 Rust)**
 ```
 src-tauri/src/commands/
-├── llm.rs                    # Multi-provider AI integration
-├── chat_history.rs           # Persistent conversation storage
-├── ocr.rs                    # Tesseract OCR processing
-├── system.rs                 # Stealth window management
-└── hotkey.rs                 # Global keyboard shortcuts
+├── llm.rs                   # Multi-provider AI integration
+├── chat_history.rs          # Persistent conversation storage
+├── browser.rs               # Browser monitoring via Accessibility APIs
+├── system.rs                # Stealth window management
+├── hotkey.rs                # Global keyboard shortcuts
+└── config.rs                # Configuration management
 ```
 
 ### **Key Components**
+
+#### **Browser Monitoring** (`browser.rs`)
+```rust
+#[tauri::command]
+pub async fn start_browser_monitoring(app: AppHandle) -> Result<(), String> {
+    // Use macOS Accessibility APIs to scan browser windows
+    let windows = scan_browser_windows().await?;
+    
+    // Detect prompts in active tab content
+    let prompts = detect_prompts_in_content(&content).await?;
+    
+    // Emit to frontend for user selection
+    let _ = app.emit("browser_state_update", &browser_state);
+    Ok(())
+}
+```
 
 #### **Chat History System** (`chat_history.rs`)
 ```rust
@@ -193,45 +183,18 @@ pub async fn save_chat_history(messages: Vec<ChatMessage>) -> Result<(), String>
     fs::write(&history_path, json)?;
     Ok(())
 }
-
-#[tauri::command]  
-pub async fn load_chat_history() -> Result<Vec<ChatMessage>, String> {
-    let history_path = get_chat_history_path()?;
-    if !history_path.exists() {
-        return Ok(Vec::new());
-    }
-    let contents = fs::read_to_string(&history_path)?;
-    serde_json::from_str(&contents)
-}
 ```
 
-#### **Structured AI Conversation** (`llm.rs`)
+#### **Stealth System** (`system.rs`)
 ```rust
 #[tauri::command]
-pub async fn query_ollama_chat_streaming(
-    app: AppHandle,
-    model: String,
-    prompt: String,
-    messages: Vec<ChatMessage>  // Full conversation history
-) -> Result<(), String> {
-    // Convert to Ollama format
-    let ollama_messages: Vec<OllamaChatMessage> = messages
-        .into_iter()
-        .map(|msg| OllamaChatMessage {
-            role: if msg.is_user { "user" } else { "assistant" },
-            content: msg.content,
-        })
-        .collect();
-    
-    // Send to Ollama's /api/chat endpoint with full context
-    let request = OllamaChatRequest {
-        model,
-        messages: ollama_messages,
-        stream: true,
-    };
-    
-    // Stream response back to frontend
-    stream_ollama_response(app, request).await
+pub async fn enable_stealth_mode(_window: Window) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Hide window from screenshots using setSharingType: 0
+        // NSWindowSharingNone prevents screen capture
+    }
+    Ok(())
 }
 ```
 
@@ -239,19 +202,19 @@ pub async fn query_ollama_chat_streaming(
 
 ### **Fully Implemented**
 - ✅ **Core Architecture**: Tauri 2.0 + Leptos 0.7 foundation
-- ✅ **Chat Memory**: Perfect conversation persistence with structured messages
-- ✅ **Multi-Provider AI**: Ollama, OpenAI, DeepSeek, Anthropic support
-- ✅ **Real-time Streaming**: Live AI response rendering
+- ✅ **Chat Assistant**: Perfect conversation memory with Ollama integration
+- ✅ **Browser Monitoring**: Accessibility API-based content detection
+- ✅ **Stealth Features**: Screenshot invisibility and system tray operation
+- ✅ **Minimalistic UI**: Clean sidebar interface with browser toggle
 
-### **Development Roadmap** 🔄
+### **Browser Monitoring Features**
+- ✅ **Cross-browser Support**: Detects Chrome, Chromium, Edge, Arc
+- ✅ **Content Parsing**: Extracts text from active browser tabs
+- ✅ **Question Detection**: Identifies potential prompts using pattern matching
+- ✅ **Real-time Updates**: Monitors tab switching and content changes
+- ✅ **Integration**: Seamless handoff from browser detection to chat assistant
 
-#### **Phase 2: Enhanced Detection**
-- [ ] **Browser Integration**: Chrome DevTools Protocol for direct DOM access
-- [ ] **Performance Optimization**: Sub-100ms question detection
-- [ ] **Multi-language Support**: Question detection in multiple languages
-
-#### **Phase 3: Advanced Features**
-- [ ] **Learning System**: Adapt to user preferences and patterns
-- [ ] **Voice Integration**: Audio responses and voice queries
-- [ ] **Collaborative Features**: Shared Q&A knowledge bases
-
+### **Next Steps** 🔄
+- [ ] **Permission Handling**: Improve macOS Accessibility permission detection
+- [ ] **Performance Optimization**: Optimize browser content scanning frequency
+- [ ] **Enhanced Detection**: Improve prompt detection accuracy and relevance scoring

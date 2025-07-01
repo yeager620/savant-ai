@@ -1,9 +1,8 @@
 use anyhow::Result;
-use screenshots::Screen;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, Window, WebviewWindowBuilder, WebviewUrl};
+use tauri::{Window};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StealthConfig {
@@ -69,44 +68,29 @@ pub async fn disable_stealth_mode(_window: Window) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn take_screenshot() -> Result<Vec<u8>, String> {
-    let screens = Screen::all().map_err(|e| format!("Failed to get screens: {}", e))?;
-    
-    if screens.is_empty() {
-        return Err("No screens found".to_string());
-    }
-    
-    // Take screenshot of primary screen
-    let screen = &screens[0];
-    let image = screen
-        .capture()
-        .map_err(|e| format!("Failed to capture screen: {}", e))?;
-    
-    // Convert to PNG bytes (simplified implementation)
-    let png_data = image.buffer().to_vec();
-    
-    Ok(png_data)
+    // Stub implementation - screenshot functionality has been removed
+    // This function is kept for compatibility but returns an error
+    Err("Screenshot functionality has been removed from this version".to_string())
 }
 
 #[tauri::command]
 pub async fn get_screen_info() -> Result<HashMap<String, serde_json::Value>, String> {
-    let screens = Screen::all().map_err(|e| format!("Failed to get screens: {}", e))?;
+    // Stub implementation - screen info functionality has been simplified
     let mut screen_info = HashMap::new();
     
-    for (i, screen) in screens.iter().enumerate() {
-        let display_info = screen.display_info;
-        screen_info.insert(
-            format!("screen_{}", i),
-            serde_json::json!({
-                "id": display_info.id,
-                "x": display_info.x,
-                "y": display_info.y,
-                "width": display_info.width,
-                "height": display_info.height,
-                "scale_factor": display_info.scale_factor,
-                "is_primary": display_info.is_primary,
-            }),
-        );
-    }
+    // Return basic mock screen info for compatibility
+    screen_info.insert(
+        "screen_0".to_string(),
+        serde_json::json!({
+            "id": 0,
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale_factor": 1.0,
+            "is_primary": true,
+        }),
+    );
     
     Ok(screen_info)
 }
@@ -138,101 +122,4 @@ pub async fn show_window_in_capture(window: Window) -> Result<(), String> {
 // Store overlay window state
 static OVERLAY_WINDOW_CREATED: Mutex<bool> = Mutex::new(false);
 
-#[tauri::command]
-pub async fn create_invisible_overlay(app: AppHandle) -> Result<(), String> {
-    let mut overlay_created = OVERLAY_WINDOW_CREATED.lock().unwrap();
-    if *overlay_created {
-        return Ok(());
-    }
 
-    let overlay_window = WebviewWindowBuilder::new(
-        &app,
-        "overlay",
-        WebviewUrl::App("/overlay".into())
-    )
-    .title("Savant AI Overlay")
-    .fullscreen(true)
-    .transparent(true)
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .visible(false)
-    .build()
-    .map_err(|e| format!("Failed to create overlay window: {}", e))?;
-
-    // Platform-specific invisibility settings
-    #[cfg(target_os = "macos")]
-    {
-        use cocoa::appkit::NSWindow;
-        use objc::runtime::Object;
-        use objc::*;
-        
-        if let Ok(ns_window) = overlay_window.ns_window() {
-            unsafe {
-                let ns_window_ptr = ns_window as *mut Object;
-                let _: () = msg_send![ns_window_ptr, setSharingType: 0]; // NSWindowSharingNone = 0
-                let _: () = msg_send![ns_window_ptr, setIgnoresMouseEvents: true];
-                let _: () = msg_send![ns_window_ptr, setLevel: 25]; // Float above all other windows
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::*;
-        use windows::Win32::Foundation::HWND;
-        
-        if let Ok(hwnd) = overlay_window.hwnd() {
-            unsafe {
-                let hwnd = HWND(hwnd.0);
-                // Make window click-through and invisible to capture
-                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-                SetWindowLongW(hwnd, GWL_EXSTYLE, 
-                    ex_style | WS_EX_LAYERED.0 as i32 | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOOLWINDOW.0 as i32);
-            }
-        }
-    }
-
-    // Start the overlay as visible but transparent
-    overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
-    
-    *overlay_created = true;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn show_overlay_window(app: AppHandle) -> Result<(), String> {
-    if let Some(overlay_window) = app.get_webview_window("overlay") {
-        overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
-    } else {
-        create_invisible_overlay(app).await?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn hide_overlay_window(app: AppHandle) -> Result<(), String> {
-    if let Some(overlay_window) = app.get_webview_window("overlay") {
-        overlay_window.hide().map_err(|e| format!("Failed to hide overlay: {}", e))?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn toggle_overlay_window(app: AppHandle) -> Result<bool, String> {
-    if let Some(overlay_window) = app.get_webview_window("overlay") {
-        let is_visible = overlay_window.is_visible().map_err(|e| format!("Failed to check visibility: {}", e))?;
-        
-        if is_visible {
-            overlay_window.hide().map_err(|e| format!("Failed to hide overlay: {}", e))?;
-            Ok(false)
-        } else {
-            overlay_window.show().map_err(|e| format!("Failed to show overlay: {}", e))?;
-            Ok(true)
-        }
-    } else {
-        create_invisible_overlay(app).await?;
-        Ok(true)
-    }
-}

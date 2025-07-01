@@ -55,19 +55,6 @@ pub async fn set_overlay_state(active: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn toggle_overlay_state() {
-    if let Ok(mut state) = OVERLAY_STATE.lock() {
-        *state = !*state;
-        println!("Overlay state toggled to: {}", *state);
-    }
-}
-
-async fn trigger_screenshot(app_handle: AppHandle) -> Result<()> {
-    // Emit an event to the frontend to trigger screenshot processing
-    app_handle.emit("hotkey-screenshot", {})?;
-    println!("Screenshot hotkey triggered");
-    Ok(())
-}
 
 #[tauri::command]
 pub async fn test_hotkey(hotkey: String) -> Result<bool, String> {
