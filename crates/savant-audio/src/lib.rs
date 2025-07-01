@@ -86,11 +86,11 @@ pub struct AudioSample {
 /// Audio capture stream handle
 pub struct AudioStream {
     pub receiver: mpsc::Receiver<AudioSample>,
-    handle: Arc<dyn StreamControl + Send + Sync>,
+    handle: Arc<dyn StreamControl>,
 }
 
 impl AudioStream {
-    pub fn new(receiver: mpsc::Receiver<AudioSample>, handle: Arc<dyn StreamControl + Send + Sync>) -> Self {
+    pub fn new(receiver: mpsc::Receiver<AudioSample>, handle: Arc<dyn StreamControl>) -> Self {
         Self { receiver, handle }
     }
 
@@ -100,7 +100,7 @@ impl AudioStream {
 }
 
 /// Stream control interface
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 pub trait StreamControl {
     async fn stop(&self) -> Result<()>;
     async fn pause(&self) -> Result<()>;
@@ -109,7 +109,7 @@ pub trait StreamControl {
 }
 
 /// Main audio capture interface
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 pub trait AudioCapture {
     /// List available audio devices
     async fn list_devices(&self) -> Result<Vec<AudioDevice>>;
@@ -128,7 +128,7 @@ pub trait AudioCapture {
 }
 
 /// Create platform-specific audio capture instance
-pub fn create_audio_capture() -> Result<Box<dyn AudioCapture + Send + Sync>> {
+pub fn create_audio_capture() -> Result<Box<dyn AudioCapture>> {
     Ok(Box::new(capture::CpalAudioCapture::new()?))
 }
 

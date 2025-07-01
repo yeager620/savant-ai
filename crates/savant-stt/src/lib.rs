@@ -71,7 +71,7 @@ pub struct WordTimestamp {
 }
 
 /// Speech-to-text processor trait
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 pub trait SpeechToText {
     /// Load model from path
     async fn load_model(&mut self, model_path: &str) -> Result<()>;
@@ -90,7 +90,7 @@ pub trait SpeechToText {
 }
 
 /// Create speech-to-text processor
-pub fn create_speech_to_text() -> Result<Box<dyn SpeechToText + Send + Sync>> {
+pub fn create_speech_to_text() -> Result<Box<dyn SpeechToText>> {
     Ok(Box::new(WhisperProcessor::new()?))
 }
 
