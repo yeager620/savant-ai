@@ -9,7 +9,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
-use crate::utils::shared_types::{DetectedQuestion, StreamingResponse};
+use crate::utils::shared_types::{DetectedQuestion, DetectedQuestionData, StreamingResponse};
 
 #[wasm_bindgen]
 extern "C" {
@@ -23,7 +23,7 @@ extern "C" {
 #[component]
 pub fn InvisibleOverlay() -> impl IntoView {
     let (detected_questions, set_detected_questions) = signal(Vec::<DetectedQuestion>::new());
-    let (streaming_responses, set_streaming_responses) = signal(HashMap::<String, String>::new());
+    let (_streaming_responses, set_streaming_responses) = signal(HashMap::<String, String>::new());
     let (is_scanning, set_is_scanning) = signal(false);
 
     // Start continuous scanning when component mounts
@@ -119,12 +119,13 @@ async fn start_continuous_scanning(set_detected_questions: WriteSignal<Vec<Detec
     
     loop {
         let result = JsFuture::from(invoke("scan_for_questions", args.clone())).await.unwrap();
-        if let Ok(result) = result.into_serde::<Vec<DetectedQuestion>>() {
+        if let Ok(result) = result.into_serde::<Vec<DetectedQuestionData>>() {
             if !result.is_empty() {
-                set_detected_questions.set(result.clone());
+                let detected_questions: Vec<DetectedQuestion> = result.iter().map(|q| q.clone().into()).collect();
+                set_detected_questions.set(detected_questions.clone());
                 
                 // Trigger AI responses for each question
-                for question in result {
+                for question in detected_questions {
                     let question_text = question.question.clone();
                     spawn_local(async move {
                         let _ = JsFuture::from(invoke("query_question", 

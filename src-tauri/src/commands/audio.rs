@@ -1,5 +1,4 @@
 use anyhow::Result;
-use tauri::AppHandle;
 use savant_audio::{create_audio_capture, AudioConfig, AudioBuffer, AudioBufferConfig};
 use savant_stt::{create_speech_to_text, SttConfig, markdown};
 use std::time::{Duration, Instant};

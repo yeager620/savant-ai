@@ -2,7 +2,6 @@ mod commands;
 
 use commands::*;
 use tauri::{Manager, menu::{MenuBuilder, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton}};
-use tauri::menu::MenuEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -115,8 +114,7 @@ pub fn run() {
             // Hide from dock and make main window invisible to screen capture
             #[cfg(target_os = "macos")]
             {
-                use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy, NSWindow};
-                use objc::runtime::Object;
+                use cocoa::appkit::{NSApp, NSApplicationActivationPolicy};
                 use objc::*;
                 
                 unsafe {
@@ -128,7 +126,6 @@ pub fn run() {
             if let Some(main_window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
                 {
-                    use cocoa::appkit::NSWindow;
                     use objc::runtime::Object;
                     use objc::*;
                     

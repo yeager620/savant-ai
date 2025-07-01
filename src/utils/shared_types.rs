@@ -67,6 +67,16 @@ pub struct BoundingBox {
     pub height: f32,
 }
 
+// Serializable version for backend/frontend communication
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedQuestionData {
+    pub id: String,
+    pub question: String,
+    pub confidence: f32,
+    pub bounding_box: BoundingBox,
+}
+
+// Frontend version with reactive signal
 #[derive(Debug, Clone)]
 pub struct DetectedQuestion {
     pub id: String,
@@ -74,6 +84,20 @@ pub struct DetectedQuestion {
     pub response: ReadSignal<String>,
     pub confidence: f32,
     pub bounding_box: BoundingBox,
+}
+
+impl From<DetectedQuestionData> for DetectedQuestion {
+    fn from(data: DetectedQuestionData) -> Self {
+        use leptos::prelude::*;
+        let (response, _) = signal(String::new());
+        Self {
+            id: data.id,
+            question: data.question,
+            confidence: data.confidence,
+            bounding_box: data.bounding_box,
+            response: response.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

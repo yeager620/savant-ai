@@ -219,17 +219,6 @@ pub fn MinimalChat() -> impl IntoView {
         <div class="minimal-chat">
             <div class="chat-header">
                 <h3>"Savant AI"</h3>
-                <button 
-                    class="browser-toggle"
-                    title="Browser Assistant"
-                    on:click=move |_| {
-                        let window = web_sys::window().unwrap();
-                        let event = web_sys::CustomEvent::new("toggle_browser_mode").unwrap();
-                        let _ = window.dispatch_event(&event);
-                    }
-                >
-                    "🌐"
-                </button>
                 <div class="header-right">
                     <button 
                         class="clear-button"
@@ -237,7 +226,7 @@ pub fn MinimalChat() -> impl IntoView {
                         on:click=clear_history
                         disabled=move || is_streaming.get() || messages.get().is_empty()
                     >
-                        "🗑"
+                        "clear"
                     </button>
                     <div class="context-usage">
                         <span class="context-text">
@@ -275,7 +264,6 @@ pub fn MinimalChat() -> impl IntoView {
             
             <Show when=move || context_warning.get().is_some()>
                 <div class="context-warning">
-                    <span class="warning-icon">"⚠"</span>
                     <span class="warning-text">
                         {move || context_warning.get().unwrap_or_default()}
                     </span>

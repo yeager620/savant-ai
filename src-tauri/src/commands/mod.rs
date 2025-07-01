@@ -13,5 +13,5 @@ pub use config::*;
 pub use hotkey::*;
 pub use llm::*;
 pub use system::*;
-pub use audio::*;
+// pub use audio::*;  // Not currently used in main handler
 pub use system_audio::*;

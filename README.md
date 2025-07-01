@@ -14,10 +14,10 @@ An invisible, seamless AI assistant with real-time system audio transcription, s
 - Fix non-functional browser monitor module and repair / update the GUI 
 
 ## Core features
-- ** Audio Transcription**: Real-time speech-to-text pipeline monitoring all audio I/O with smart database for long-term memory
-- ** Chat Assistant**: Local Ollama integration with conversation memory  
-- [WIP] ** Browser Monitoring**: Accessibility API-based content detection
-- ** Invisibility**: All operation should be hidden from external screen capture, screenshots, etc.
+- Audio Transcription: Real-time speech-to-text pipeline monitoring all audio I/O with smart database for long-term memory
+- Chat Assistant: Local Ollama integration with conversation memory  
+- [WIP] Browser Monitoring: Accessibility API-based content detection
+- Invisibility: All operation should be hidden from external screen capture, screenshots, etc.
 
 ## Architecture
 

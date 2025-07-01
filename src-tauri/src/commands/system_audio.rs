@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use std::process::Command;
 use std::path::Path;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SystemAudioStatus {
@@ -118,7 +117,8 @@ async fn internal_check_status() -> Result<SystemAudioStatus> {
     // Check if setup files exist
     let daemon_plist = Path::new("/Library/LaunchAgents/com.savant.audio.daemon.plist");
     let home_dir = std::env::var("HOME").unwrap_or_default();
-    let daemon_script = Path::new(&format!("{}/savant-audio-daemon.sh", home_dir));
+    let daemon_script_path = format!("{}/savant-audio-daemon.sh", home_dir);
+    let daemon_script = Path::new(&daemon_script_path);
     
     status.setup_completed = daemon_plist.exists() && daemon_script.exists();
 
