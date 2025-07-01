@@ -1,0 +1,24 @@
+[package]
+name = "savant-audio"
+version = "0.1.0"
+edition = "2021"
+description = "Cross-platform audio capture library for Savant AI"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+cpal = "0.15"
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+tracing = "0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific dependencies for system audio capture
+core-foundation = "0.9"
+core-audio = "0.11"
+
+[features]
+default = ["system-audio"]
+system-audio = []  # Enable system-wide audio capture (requires permissions)

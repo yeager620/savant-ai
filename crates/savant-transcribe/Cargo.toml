@@ -1,0 +1,25 @@
+[package]
+name = "savant-transcribe"
+version = "0.1.0"
+edition = "2021"
+description = "Standalone CLI tool for audio transcription - follows UNIX philosophy"
+
+[[bin]]
+name = "savant-transcribe"
+path = "src/main.rs"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+savant-audio = { path = "../savant-audio" }
+savant-stt = { path = "../savant-stt" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"

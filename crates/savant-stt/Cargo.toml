@@ -1,0 +1,23 @@
+[package]
+name = "savant-stt"
+version = "0.1.0"
+edition = "2021"
+description = "Speech-to-text processing library for Savant AI using Whisper"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+whisper-rs = { version = "0.12", features = ["cuda", "metal"] }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+tracing = "0.1"
+hound = "3.5"  # WAV file handling
+dirs = "5.0"   # For model storage paths
+
+[features]
+default = ["whisper"]
+whisper = []
+cuda = ["whisper-rs/cuda"]
+metal = ["whisper-rs/metal"]  # Apple Silicon GPU acceleration
