@@ -4,6 +4,7 @@ use crate::{SpeechToText, SttConfig, TranscriptionResult, TranscriptionSegment, 
 use anyhow::{anyhow, Result};
 use std::time::Instant;
 use tracing::{debug, info, warn};
+use async_trait::async_trait;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState, WhisperContextParameters};
 
 pub struct WhisperProcessor {
@@ -56,7 +57,7 @@ impl WhisperProcessor {
 
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 impl SpeechToText for WhisperProcessor {
     async fn load_model(&mut self, model_path: &str) -> Result<()> {
         info!("Loading Whisper model from: {}", model_path);

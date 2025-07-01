@@ -10,6 +10,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use async_trait::async_trait;
 
 pub mod capture;
 pub mod devices;
@@ -100,7 +101,7 @@ impl AudioStream {
 }
 
 /// Stream control interface
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 pub trait StreamControl {
     async fn stop(&self) -> Result<()>;
     async fn pause(&self) -> Result<()>;
@@ -109,7 +110,7 @@ pub trait StreamControl {
 }
 
 /// Main audio capture interface
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 pub trait AudioCapture {
     /// List available audio devices
     async fn list_devices(&self) -> Result<Vec<AudioDevice>>;
