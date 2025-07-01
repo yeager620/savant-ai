@@ -17,7 +17,7 @@ MCP is an open standard by Anthropic that standardizes AI-data source connection
 - **Security**: Built-in access control and validation mechanisms
 - **Standardization**: Consistent interface across different LLM providers
 
-#### Implementation Architecture
+#### Implementation Architecture (Revised)
 ```mermaid
 graph TB
     subgraph "Savant AI Desktop App"
@@ -26,10 +26,13 @@ graph TB
         DB[SQLite Database]
     end
     
-    subgraph "MCP Integration Layer"
+    subgraph "Simplified MCP Integration Layer"
         MCPServer[MCP Server]
-        QueryEngine[Natural Language Query Engine]
-        SecurityLayer[Access Control & Validation]
+        QueryGateway[Query Gateway]
+        SimplePatterns[Simple Query Patterns]
+        LLMProcessor[LLM Query Processor]
+        SecurityLayer[Enhanced Security Layer]
+        ContextManager[Context Manager]
     end
     
     subgraph "LLM Providers"
@@ -40,25 +43,31 @@ graph TB
     
     UI --> Backend
     Backend --> MCPServer
-    MCPServer --> QueryEngine
-    QueryEngine --> SecurityLayer
-    SecurityLayer --> DB
+    MCPServer --> QueryGateway
+    QueryGateway --> SimplePatterns
+    QueryGateway --> LLMProcessor
+    SimplePatterns --> SecurityLayer
+    LLMProcessor --> SecurityLayer
+    SecurityLayer --> ContextManager
+    ContextManager --> DB
     
     Claude <--> MCPServer
     Ollama <--> MCPServer
     OpenAI <--> MCPServer
     
-    style MCPServer fill:#4169e1
-    style QueryEngine fill:#00ff41
+    style QueryGateway fill:#4169e1
+    style LLMProcessor fill:#00ff41
     style SecurityLayer fill:#ff6b35
+    style ContextManager fill:#9d4edd
 ```
 
 #### Technical Specifications
-- **Transport**: stdio for local desktop integration
-- **Protocol**: JSON-RPC 2.0 with SSE for streaming
+- **Transport**: Abstracted transport layer (stdio primary, HTTP/WebSocket future)
+- **Protocol**: JSON-RPC 2.0 with streaming support
 - **Resources**: Database schema, conversation lists, speaker profiles
-- **Tools**: Query execution, analytics, relationship analysis
-- **Prompts**: Templated workflows for common queries
+- **Tools**: Natural language query, analytics, semantic search, context-aware responses
+- **Security**: Enhanced validation, rate limiting, timing attack prevention
+- **Context**: Session-based conversation context management
 
 ### B. Direct Function Calling - **RECOMMENDED SECONDARY**
 
@@ -126,33 +135,78 @@ pub struct QuerySecurityManager {
 }
 
 impl QuerySecurityManager {
-    pub fn validate_query(&self, query: &str) -> Result<(), SecurityError> {
+    pub fn validate_query(&self, query: &str, complexity: QueryComplexity) -> Result<(), SecurityError> {
         // 1. Parse SQL to AST
+        let ast = sqlparser::parse_sql(query).map_err(|_| SecurityError::InvalidSQL)?;
+        
         // 2. Validate SELECT-only operations
+        self.ensure_read_only(&ast)?;
+        
         // 3. Check table whitelist
+        self.validate_table_access(&ast)?;
+        
         // 4. Validate result limits
+        self.check_result_limits(&ast)?;
+        
         // 5. Check for sensitive data access
+        self.validate_column_access(&ast)?;
+        
+        // 6. Prevent timing-based attacks
+        if self.contains_timing_attack_patterns(query) {
+            return Err(SecurityError::TimingAttack);
+        }
+        
+        // 7. Rate limiting per query complexity
+        if !self.rate_limiter.check_complexity(complexity) {
+            return Err(SecurityError::RateLimitExceeded);
+        }
+        
+        // 8. Enforce parameterized queries
+        if self.contains_string_concatenation(query) {
+            return Err(SecurityError::RequiresParameterization);
+        }
+        
+        Ok(())
     }
     
     pub fn sanitize_natural_query(&self, input: &str) -> String {
         // Remove potentially dangerous characters
-        // Limit query length
-        // Validate encoding
+        let sanitized = input.chars()
+            .filter(|c| c.is_alphanumeric() || " .,?!-_()[]{}".contains(*c))
+            .take(1000)  // Limit query length
+            .collect();
+        
+        // Validate encoding and return
+        String::from_utf8_lossy(sanitized.as_bytes()).to_string()
+    }
+    
+    fn estimate_query_cost(&self, query: &str) -> QueryComplexity {
+        // Analyze query complexity for rate limiting
+        let complexity_score = query.matches("JOIN").count() * 2 +
+                              query.matches("ORDER BY").count() * 1 +
+                              query.matches("GROUP BY").count() * 2;
+        
+        match complexity_score {
+            0..=2 => QueryComplexity::Low,
+            3..=5 => QueryComplexity::Medium,
+            _ => QueryComplexity::High,
+        }
     }
 }
 ```
 
-#### 1.3 Natural Language Query Parser
+#### 1.3 LLM-Powered Query Processor (Revised)
 ```rust
-pub struct NaturalLanguageQueryParser {
-    intent_classifier: IntentClassifier,
-    entity_extractor: EntityExtractor,
-    query_builder: QueryBuilder,
+pub struct QueryProcessor {
+    llm_client: Box<dyn LLMClient>,
+    simple_patterns: Vec<(Regex, String)>,
+    context_manager: Arc<ConversationContextManager>,
 }
 
-pub struct QueryIntent {
-    pub intent_type: IntentType,
-    pub entities: HashMap<String, String>,
+pub struct QueryResult {
+    pub intent: IntentType,
+    pub sql_query: String,
+    pub parameters: HashMap<String, serde_json::Value>,
     pub confidence: f32,
 }
 
@@ -163,6 +217,35 @@ pub enum IntentType {
     SearchContent,
     GetStatistics,
     ExportData,
+    Unknown,
+}
+
+impl QueryProcessor {
+    pub async fn process_query(&self, natural_query: &str, session_id: &str) -> Result<QueryResult> {
+        // First try simple pattern matching for common queries
+        if let Some(simple_result) = self.try_simple_patterns(natural_query) {
+            return Ok(simple_result);
+        }
+        
+        // Enhance query with conversation context
+        let enhanced_query = self.context_manager.enhance_query(session_id, natural_query);
+        
+        // Use LLM for complex query understanding
+        let llm_response = self.llm_client.complete(&format!(
+            "Convert this natural language query to a structured database query:
+            Query: {}
+            
+            Return JSON with:
+            - intent: find_conversations|analyze_speaker|search_content|get_statistics
+            - sql_query: parameterized SQL query with ? placeholders
+            - parameters: object with parameter values
+            - confidence: 0.0-1.0
+            
+            JSON:", enhanced_query
+        )).await?;
+        
+        serde_json::from_str(&llm_response).map_err(Into::into)
+    }
 }
 ```
 

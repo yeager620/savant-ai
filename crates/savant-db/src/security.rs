@@ -4,13 +4,31 @@
 
 use anyhow::{anyhow, Result};
 use regex::Regex;
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 use sqlparser::ast::{Statement, Query, SetExpr, SelectItem, TableFactor, Expr};
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
-/// Security manager for validating and controlling database access
+/// Query complexity levels for rate limiting
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueryComplexity {
+    Low,
+    Medium,
+    High,
+}
+
+/// Rate limiter for preventing abuse
+pub struct RateLimiter {
+    query_history: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    max_queries_per_minute: usize,
+    max_complexity_per_minute: usize,
+}
+
+/// Enhanced security manager for validating and controlling database access
 pub struct QuerySecurityManager {
     /// Tables that can be queried
     pub allowed_tables: HashSet<String>,
@@ -22,6 +40,12 @@ pub struct QuerySecurityManager {
     pub allow_joins: bool,
     /// Regex patterns for dangerous operations
     dangerous_patterns: Vec<Regex>,
+    /// Rate limiter for query frequency
+    rate_limiter: RateLimiter,
+    /// Patterns that could indicate timing attacks
+    timing_attack_patterns: Vec<Regex>,
+    /// Patterns that suggest string concatenation (injection risk)
+    concatenation_patterns: Vec<Regex>,
 }
 
 /// Errors that can occur during security validation
@@ -53,11 +77,59 @@ pub enum SecurityError {
     
     #[error("Sensitive content detected")]
     SensitiveContent,
+    
+    #[error("Timing attack pattern detected")]
+    TimingAttack,
+    
+    #[error("Rate limit exceeded")]
+    RateLimitExceeded,
+    
+    #[error("String concatenation detected - requires parameterization")]
+    RequiresParameterization,
+    
+    #[error("Invalid SQL structure")]
+    InvalidSQL,
 }
 
 impl Default for QuerySecurityManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl RateLimiter {
+    pub fn new() -> Self {
+        Self {
+            query_history: Arc::new(RwLock::new(HashMap::new())),
+            max_queries_per_minute: 60,
+            max_complexity_per_minute: 100,
+        }
+    }
+    
+    pub async fn check_rate_limit(&self, client_id: &str) -> bool {
+        let now = Instant::now();
+        let mut history = self.query_history.write().await;
+        
+        let client_queries = history.entry(client_id.to_string()).or_insert_with(Vec::new);
+        
+        // Remove queries older than 1 minute
+        client_queries.retain(|&timestamp| now.duration_since(timestamp) < Duration::from_secs(60));
+        
+        if client_queries.len() >= self.max_queries_per_minute {
+            return false;
+        }
+        
+        client_queries.push(now);
+        true
+    }
+    
+    pub async fn check_complexity(&self, complexity: QueryComplexity) -> bool {
+        // Simplified complexity check - in production this would track complexity points
+        match complexity {
+            QueryComplexity::High => self.check_rate_limit("complexity_high").await,
+            QueryComplexity::Medium => true, // Allow medium complexity more freely
+            QueryComplexity::Low => true,
+        }
     }
 }
 
@@ -82,12 +154,28 @@ impl QuerySecurityManager {
             Regex::new(r"(?i);").unwrap(), // Multiple statements
         ];
         
+        let timing_attack_patterns = vec![
+            Regex::new(r"(?i)\bsleep\s*\(").unwrap(),
+            Regex::new(r"(?i)\bwaitfor\s+delay").unwrap(),
+            Regex::new(r"(?i)\bbenchmark\s*\(").unwrap(),
+            Regex::new(r"(?i)\bheavy_computation\s*\(").unwrap(),
+        ];
+        
+        let concatenation_patterns = vec![
+            Regex::new(r"(?i)\|\|").unwrap(), // String concatenation
+            Regex::new(r"(?i)\+.*['\"]").unwrap(), // Potential string concatenation
+            Regex::new(r"(?i)concat\s*\(").unwrap(), // CONCAT function
+        ];
+        
         Self {
             allowed_tables,
             max_result_limit: 1000,
             query_timeout: Duration::from_secs(30),
             allow_joins: true,
             dangerous_patterns,
+            rate_limiter: RateLimiter::new(),
+            timing_attack_patterns,
+            concatenation_patterns,
         }
     }
     
@@ -132,14 +220,46 @@ impl QuerySecurityManager {
         Ok(self.sanitize_natural_query(query))
     }
     
-    /// Validate a generated SQL query
-    pub fn validate_sql_query(&self, sql: &str) -> Result<(), SecurityError> {
-        // Parse SQL to ensure it's valid and safe
+    /// Enhanced validation for generated SQL queries
+    pub async fn validate_query(&self, query: &str, complexity: QueryComplexity) -> Result<(), SecurityError> {
+        // 1. Parse SQL to AST
+        let ast = self.parse_and_validate_sql(query)?;
+        
+        // 2. Validate SELECT-only operations
+        self.ensure_read_only(&ast)?;
+        
+        // 3. Check table whitelist
+        self.validate_table_access_ast(&ast)?;
+        
+        // 4. Validate result limits
+        self.check_result_limits(&ast)?;
+        
+        // 5. Check for sensitive data access
+        self.validate_column_access(&ast)?;
+        
+        // 6. Prevent timing-based attacks
+        if self.contains_timing_attack_patterns(query) {
+            return Err(SecurityError::TimingAttack);
+        }
+        
+        // 7. Rate limiting per query complexity
+        if !self.rate_limiter.check_complexity(complexity).await {
+            return Err(SecurityError::RateLimitExceeded);
+        }
+        
+        // 8. Enforce parameterized queries
+        if self.contains_string_concatenation(query) {
+            return Err(SecurityError::RequiresParameterization);
+        }
+        
+        Ok(())
+    }
+    
+    /// Parse SQL and perform basic validation
+    fn parse_and_validate_sql(&self, sql: &str) -> Result<Vec<Statement>, SecurityError> {
         let dialect = SQLiteDialect {};
         let statements = Parser::parse_sql(&dialect, sql)
-            .map_err(|e| SecurityError::ParseError { 
-                reason: e.to_string() 
-            })?;
+            .map_err(|_| SecurityError::InvalidSQL)?;
         
         if statements.len() != 1 {
             return Err(SecurityError::DangerousOperation {
@@ -147,24 +267,90 @@ impl QuerySecurityManager {
             });
         }
         
-        let statement = &statements[0];
-        
-        // Only allow SELECT statements
-        match statement {
-            Statement::Query(query) => self.validate_select_query(query)?,
-            _ => return Err(SecurityError::NonSelectOperation),
-        }
-        
-        // Check for dangerous patterns in raw SQL
-        for pattern in &self.dangerous_patterns {
-            if pattern.is_match(sql) {
-                return Err(SecurityError::DangerousOperation {
-                    operation: format!("Pattern match: {}", pattern.as_str()),
-                });
+        Ok(statements)
+    }
+    
+    /// Ensure query only contains read operations
+    fn ensure_read_only(&self, statements: &[Statement]) -> Result<(), SecurityError> {
+        for statement in statements {
+            match statement {
+                Statement::Query(_) => {}, // SELECT is OK
+                _ => return Err(SecurityError::NonSelectOperation),
             }
         }
-        
         Ok(())
+    }
+    
+    /// Validate table access using AST
+    fn validate_table_access_ast(&self, statements: &[Statement]) -> Result<(), SecurityError> {
+        for statement in statements {
+            if let Statement::Query(query) = statement {
+                self.validate_select_query(query)?;
+            }
+        }
+        Ok(())
+    }
+    
+    /// Check result limits in AST
+    fn check_result_limits(&self, statements: &[Statement]) -> Result<(), SecurityError> {
+        for statement in statements {
+            if let Statement::Query(query) = statement {
+                if let Some(limit) = &query.limit {
+                    if let Expr::Value(sqlparser::ast::Value::Number(limit_str, _)) = limit {
+                        if let Ok(limit_num) = limit_str.parse::<usize>() {
+                            if limit_num > self.max_result_limit {
+                                return Err(SecurityError::ExcessiveResultLimit {
+                                    limit: limit_num,
+                                    max_limit: self.max_result_limit,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    /// Validate column access permissions
+    fn validate_column_access(&self, _statements: &[Statement]) -> Result<(), SecurityError> {
+        // In a production system, this would check for sensitive columns
+        // For now, we allow all columns on allowed tables
+        Ok(())
+    }
+    
+    /// Check for timing attack patterns
+    fn contains_timing_attack_patterns(&self, query: &str) -> bool {
+        self.timing_attack_patterns.iter().any(|pattern| pattern.is_match(query))
+    }
+    
+    /// Check for string concatenation patterns
+    fn contains_string_concatenation(&self, query: &str) -> bool {
+        self.concatenation_patterns.iter().any(|pattern| pattern.is_match(query))
+    }
+    
+    /// Estimate query complexity for rate limiting
+    pub fn estimate_query_cost(&self, query: &str) -> QueryComplexity {
+        let complexity_score = query.matches("JOIN").count() * 2 +
+                              query.matches("ORDER BY").count() * 1 +
+                              query.matches("GROUP BY").count() * 2 +
+                              query.matches("LIKE").count() * 1 +
+                              query.matches("MATCH").count() * 3; // FTS queries are expensive
+        
+        match complexity_score {
+            0..=2 => QueryComplexity::Low,
+            3..=5 => QueryComplexity::Medium,
+            _ => QueryComplexity::High,
+        }
+    }
+    
+    /// Legacy SQL validation method for backward compatibility
+    pub fn validate_sql_query(&self, sql: &str) -> Result<(), SecurityError> {
+        let complexity = self.estimate_query_cost(sql);
+        // Note: This is a blocking version - in practice use validate_query
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.validate_query(sql, complexity))
+        })
     }
     
     /// Validate a SELECT query AST

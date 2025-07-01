@@ -6,8 +6,11 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc, NaiveDate};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use sqlx::SqlitePool;
+use tokio::sync::RwLock;
+use uuid;
 
 /// Intent types for natural language queries
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -46,7 +49,52 @@ pub struct QueryIntent {
     pub original_query: String,
 }
 
-/// Natural language query parser with intent classification
+/// LLM trait for query processing
+#[async_trait::async_trait]
+pub trait LLMClient: Send + Sync {
+    async fn complete(&self, prompt: &str) -> Result<String>;
+}
+
+/// Conversation context for follow-up queries
+#[derive(Debug, Clone)]
+pub struct ConversationContext {
+    pub session_id: String,
+    pub previous_queries: Vec<String>,
+    pub active_filters: HashMap<String, String>,
+    pub last_results: Vec<String>, // IDs of last returned results
+}
+
+/// Context manager for maintaining conversation state
+pub struct ConversationContextManager {
+    contexts: Arc<RwLock<HashMap<String, ConversationContext>>>,
+}
+
+/// Query complexity levels for rate limiting
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueryComplexity {
+    Low,
+    Medium, 
+    High,
+}
+
+/// LLM-powered query processor (replacing regex-based approach)
+pub struct QueryProcessor {
+    llm_client: Option<Box<dyn LLMClient>>,
+    simple_patterns: Vec<(Regex, String)>,
+    context_manager: Arc<ConversationContextManager>,
+    pool: SqlitePool,
+}
+
+/// Enhanced query result with LLM processing
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LLMQueryResult {
+    pub intent: String,
+    pub sql_query: String,
+    pub parameters: HashMap<String, serde_json::Value>,
+    pub confidence: f32,
+}
+
+/// Legacy natural language query parser (for backward compatibility)
 pub struct NaturalLanguageQueryParser {
     intent_classifier: IntentClassifier,
     entity_extractor: EntityExtractor,
@@ -80,6 +128,132 @@ pub struct QueryResult {
     pub results: serde_json::Value,
     pub execution_time_ms: u64,
     pub result_count: usize,
+}
+
+impl ConversationContextManager {
+    pub fn new() -> Self {
+        Self {
+            contexts: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+    
+    pub async fn enhance_query(&self, session_id: &str, query: &str) -> String {
+        let contexts = self.contexts.read().await;
+        if let Some(context) = contexts.get(session_id) {
+            // Add context to help LLM understand follow-up queries
+            format!(
+                "Previous queries: {:?}\nActive filters: {:?}\nCurrent query: {}",
+                context.previous_queries.iter().rev().take(3).collect::<Vec<_>>(),
+                context.active_filters,
+                query
+            )
+        } else {
+            query.to_string()
+        }
+    }
+    
+    pub async fn update_context(&self, session_id: &str, query: &str, results: &[String]) {
+        let mut contexts = self.contexts.write().await;
+        let context = contexts.entry(session_id.to_string()).or_insert_with(|| {
+            ConversationContext {
+                session_id: session_id.to_string(),
+                previous_queries: Vec::new(),
+                active_filters: HashMap::new(),
+                last_results: Vec::new(),
+            }
+        });
+        
+        context.previous_queries.push(query.to_string());
+        context.last_results = results.to_vec();
+        
+        // Keep only last 10 queries
+        if context.previous_queries.len() > 10 {
+            context.previous_queries = context.previous_queries.split_off(context.previous_queries.len() - 10);
+        }
+    }
+}
+
+impl QueryProcessor {
+    pub fn new(pool: SqlitePool, llm_client: Option<Box<dyn LLMClient>>) -> Self {
+        let simple_patterns = vec![
+            (Regex::new(r"(?i)\b(statistics|stats|summary|overview|total)\b").unwrap(), "get_statistics".to_string()),
+            (Regex::new(r"(?i)\b(list|show)\s+(speakers?|people)").unwrap(), "list_speakers".to_string()),
+        ];
+        
+        Self {
+            llm_client,
+            simple_patterns,
+            context_manager: Arc::new(ConversationContextManager::new()),
+            pool,
+        }
+    }
+    
+    pub async fn process_query(&self, natural_query: &str, session_id: &str) -> Result<LLMQueryResult> {
+        // First try simple pattern matching for common queries
+        if let Some(simple_result) = self.try_simple_patterns(natural_query) {
+            return Ok(simple_result);
+        }
+        
+        // Use LLM for complex query understanding if available
+        if let Some(ref llm_client) = self.llm_client {
+            let enhanced_query = self.context_manager.enhance_query(session_id, natural_query).await;
+            
+            let llm_response = llm_client.complete(&format!(
+                "Convert this natural language query to a structured database query:
+                Query: {}
+                
+                Return JSON with:
+                - intent: find_conversations|analyze_speaker|search_content|get_statistics|list_speakers
+                - sql_query: parameterized SQL query with ? placeholders
+                - parameters: object with parameter values
+                - confidence: 0.0-1.0
+                
+                JSON:", enhanced_query
+            )).await?;
+            
+            return serde_json::from_str(&llm_response).map_err(Into::into);
+        }
+        
+        // Fallback to pattern-based processing
+        self.fallback_processing(natural_query)
+    }
+    
+    fn try_simple_patterns(&self, query: &str) -> Option<LLMQueryResult> {
+        for (pattern, intent) in &self.simple_patterns {
+            if pattern.is_match(query) {
+                let sql_query = match intent.as_str() {
+                    "get_statistics" => "SELECT COUNT(DISTINCT c.id) as total_conversations, COUNT(DISTINCT s.speaker) as unique_speakers, COUNT(s.id) as total_segments FROM conversations c LEFT JOIN segments s ON c.id = s.conversation_id".to_string(),
+                    "list_speakers" => "SELECT speaker, COUNT(DISTINCT conversation_id) as conversation_count FROM segments WHERE speaker IS NOT NULL GROUP BY speaker ORDER BY conversation_count DESC LIMIT 20".to_string(),
+                    _ => continue,
+                };
+                
+                return Some(LLMQueryResult {
+                    intent: intent.clone(),
+                    sql_query,
+                    parameters: HashMap::new(),
+                    confidence: 0.9,
+                });
+            }
+        }
+        None
+    }
+    
+    fn fallback_processing(&self, query: &str) -> Result<LLMQueryResult> {
+        // Simple fallback to content search
+        let sql_query = "SELECT s.text, s.speaker, s.timestamp, c.title as conversation_title FROM segments s JOIN conversations c ON s.conversation_id = c.id WHERE s.text LIKE ? OR s.processed_text LIKE ? ORDER BY s.timestamp DESC LIMIT 50".to_string();
+        
+        let search_term = format!("%{}%", query);
+        let mut parameters = HashMap::new();
+        parameters.insert("0".to_string(), serde_json::Value::String(search_term.clone()));
+        parameters.insert("1".to_string(), serde_json::Value::String(search_term));
+        
+        Ok(LLMQueryResult {
+            intent: "search_content".to_string(),
+            sql_query,
+            parameters,
+            confidence: 0.5,
+        })
+    }
 }
 
 impl NaturalLanguageQueryParser {
@@ -420,6 +594,189 @@ impl EntityExtractor {
         }
         
         entities
+    }
+}
+
+/// Query feedback for learning and optimization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UserFeedback {
+    Good,
+    BadResults,
+    TooSlow,
+    WrongIntent,
+    Irrelevant,
+}
+
+/// Query optimizer for learning from user feedback
+pub struct QueryOptimizer {
+    feedback_history: Arc<RwLock<HashMap<String, Vec<(UserFeedback, chrono::DateTime<Utc>)>>>>,
+    successful_patterns: Arc<RwLock<HashMap<String, String>>>, // query pattern -> successful SQL
+    pool: SqlitePool,
+}
+
+/// Query error with user-friendly suggestions
+#[derive(Debug, Serialize, Deserialize)]
+pub enum QueryError {
+    Ambiguous { 
+        query: String, 
+        suggestions: Vec<String> 
+    },
+    NoResults { 
+        query: String, 
+        did_you_mean: Option<String> 
+    },
+    TooManyResults { 
+        count: usize, 
+        suggestion: String 
+    },
+    ExecutionError {
+        query: String,
+        error_message: String,
+    },
+}
+
+impl QueryError {
+    pub fn to_user_message(&self) -> String {
+        match self {
+            Self::Ambiguous { suggestions, .. } => {
+                format!("Your query was ambiguous. Did you mean:\n{}", 
+                    suggestions.join("\n• "))
+            }
+            Self::NoResults { query, did_you_mean } => {
+                let base = format!("No results found for '{}'.", query);
+                if let Some(suggestion) = did_you_mean {
+                    format!("{} Did you mean '{}'?", base, suggestion)
+                } else {
+                    format!("{} Try a different search term or check spelling.", base)
+                }
+            }
+            Self::TooManyResults { count, suggestion } => {
+                format!("Found {} results (showing first 50). {}", count, suggestion)
+            }
+            Self::ExecutionError { query, error_message } => {
+                format!("Error executing query '{}': {}", query, error_message)
+            }
+        }
+    }
+}
+
+impl QueryOptimizer {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self {
+            feedback_history: Arc::new(RwLock::new(HashMap::new())),
+            successful_patterns: Arc::new(RwLock::new(HashMap::new())),
+            pool,
+        }
+    }
+    
+    pub async fn learn_from_feedback(
+        &self, 
+        query: &str, 
+        sql_query: &str,
+        results: &serde_json::Value, 
+        feedback: UserFeedback
+    ) -> Result<()> {
+        let mut history = self.feedback_history.write().await;
+        let query_key = self.normalize_query_for_learning(query);
+        
+        let feedback_entry = (feedback.clone(), chrono::Utc::now());
+        history.entry(query_key.clone()).or_insert_with(Vec::new).push(feedback_entry);
+        
+        match feedback {
+            UserFeedback::Good => {
+                // Cache this successful pattern
+                let mut patterns = self.successful_patterns.write().await;
+                patterns.insert(query_key, sql_query.to_string());
+                
+                // Store in database for persistence
+                self.store_successful_pattern(query, sql_query).await?;
+            }
+            UserFeedback::BadResults | UserFeedback::WrongIntent => {
+                // Log for analysis and potential prompt adjustment
+                self.log_failed_query(query, sql_query, &feedback).await?;
+            }
+            _ => {}
+        }
+        
+        Ok(())
+    }
+    
+    pub async fn get_query_suggestions(&self, query: &str) -> Vec<String> {
+        let normalized = self.normalize_query_for_learning(query);
+        let patterns = self.successful_patterns.read().await;
+        
+        // Find similar successful queries
+        let mut suggestions = Vec::new();
+        for (pattern, _) in patterns.iter() {
+            if self.calculate_similarity(&normalized, pattern) > 0.7 {
+                suggestions.push(pattern.clone());
+            }
+        }
+        
+        suggestions.truncate(3); // Limit to top 3 suggestions
+        suggestions
+    }
+    
+    async fn store_successful_pattern(&self, query: &str, sql_query: &str) -> Result<()> {
+        let query_id = uuid::Uuid::new_v4().to_string();
+        
+        sqlx::query(
+            "INSERT OR REPLACE INTO query_history 
+             (id, natural_query, structured_query, intent_type, success, timestamp) 
+             VALUES (?, ?, ?, 'learned_pattern', true, ?)")
+            .bind(&query_id)
+            .bind(query)
+            .bind(sql_query)
+            .bind(chrono::Utc::now())
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(())
+    }
+    
+    async fn log_failed_query(&self, query: &str, sql_query: &str, feedback: &UserFeedback) -> Result<()> {
+        let query_id = uuid::Uuid::new_v4().to_string();
+        let error_message = format!("User feedback: {:?}", feedback);
+        
+        sqlx::query(
+            "INSERT INTO query_history 
+             (id, natural_query, structured_query, intent_type, success, error_message, timestamp) 
+             VALUES (?, ?, ?, 'failed_pattern', false, ?, ?)")
+            .bind(&query_id)
+            .bind(query)
+            .bind(sql_query)
+            .bind(&error_message)
+            .bind(chrono::Utc::now())
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(())
+    }
+    
+    fn normalize_query_for_learning(&self, query: &str) -> String {
+        // Normalize query for pattern matching
+        query.to_lowercase()
+            .split_whitespace()
+            .filter(|word| ![
+                "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"
+            ].contains(word))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+    
+    fn calculate_similarity(&self, query1: &str, query2: &str) -> f32 {
+        // Simple word overlap similarity
+        let words1: HashSet<&str> = query1.split_whitespace().collect();
+        let words2: HashSet<&str> = query2.split_whitespace().collect();
+        
+        let intersection = words1.intersection(&words2).count();
+        let union = words1.union(&words2).count();
+        
+        if union == 0 {
+            0.0
+        } else {
+            intersection as f32 / union as f32
+        }
     }
 }
 
