@@ -18,7 +18,7 @@ async fn internal_transcribe(duration: u32, system: bool) -> Result<String> {
     config.capture_system_audio = system;
 
     let capture = create_audio_capture()?;
-    let stream = if system {
+    let mut stream = if system {
         capture.start_system_capture(config.clone()).await?
     } else {
         capture.start_capture(config.clone()).await?
@@ -41,7 +41,7 @@ async fn internal_transcribe(duration: u32, system: bool) -> Result<String> {
     let audio = buffer.get_sample();
 
     let mut stt = create_speech_to_text()?;
-    let mut stt_cfg = SttConfig::default();
+    let stt_cfg = SttConfig::default();
     stt.load_model(&stt_cfg.model_path).await?;
 
     let result = stt.transcribe(&audio.data, audio.sample_rate).await?;

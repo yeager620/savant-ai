@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Cross-platform audio capture library for Savant AI"
 
+[[bin]]
+name = "list-devices"
+path = "src/bin/list-devices.rs"
+
 [dependencies]
 savant-core = { path = "../savant-core" }
 cpal = "0.15"
@@ -19,7 +23,6 @@ hound = "3.5"
 [target.'cfg(target_os = "macos")'.dependencies]
 # macOS-specific dependencies for system audio capture
 core-foundation = "0.9"
-coreaudio-rs = "0.13"
 
 [features]
 default = ["system-audio"]

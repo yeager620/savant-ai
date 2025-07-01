@@ -1,3 +1,7 @@
+mod llm;
+mod shared_types;
+mod ocr;
+
 // Shared types for frontend components
 use serde::{Deserialize, Serialize};
 

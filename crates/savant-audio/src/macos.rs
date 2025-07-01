@@ -1,11 +1,10 @@
 //! macOS-specific audio capture implementation using Core Audio
 
-use crate::{AudioConfig, AudioSample, AudioStream, StreamControl};
+use crate::{AudioCapture, AudioConfig, AudioStream, StreamControl};
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 use async_trait::async_trait;
 
 /// macOS system audio capture using Core Audio APIs
@@ -21,7 +20,7 @@ impl MacOSSystemCapture {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl StreamControl for MacOSSystemCapture {
     async fn stop(&self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);
@@ -46,121 +45,92 @@ impl StreamControl for MacOSSystemCapture {
     }
 }
 
-/// Start system audio capture on macOS
+/// Start system audio capture on macOS using BlackHole or similar loopback device
 pub async fn start_system_audio_capture(config: AudioConfig) -> Result<AudioStream> {
-    // Check macOS version and permissions
-    if !check_macos_version()? {
-        return Err(anyhow!(
-            "System audio capture requires macOS 14.4 or later"
-        ));
-    }
-
-    if !check_audio_permissions().await? {
-        return Err(anyhow!(
-            "Audio capture permissions not granted. Please grant permissions in System Preferences."
-        ));
-    }
-
     info!("Starting macOS system audio capture");
 
-    let (tx, rx) = mpsc::channel(100);
-    let running = Arc::new(AtomicBool::new(true));
-    let running_clone = running.clone();
+    // Check if BlackHole or similar loopback device is available
+    if !check_loopback_device_available().await? {
+        return Err(anyhow!(
+            "System audio capture requires a loopback audio device like BlackHole. Please install BlackHole from: https://github.com/ExistentialAudio/BlackHole"
+        ));
+    }
 
-    // Create Core Audio capture unit
-    let capture_unit = create_system_audio_unit(config, tx, running_clone).await?;
+    // Use CPAL to capture from the loopback device
+    let cpal_capture = crate::capture::CpalAudioCapture::new()?;
     
-    let stream_control = Arc::new(MacOSSystemCapture {
-        running: running.clone(),
+    // Find BlackHole or similar loopback device
+    let devices = cpal_capture.list_devices().await?;
+    let loopback_device = devices
+        .iter()
+        .find(|d| {
+            let name_lower = d.name.to_lowercase();
+            name_lower.contains("blackhole") 
+                || name_lower.contains("loopback")
+                || name_lower.contains("soundflower")
+                || name_lower.contains("virtual")
+        })
+        .ok_or_else(|| anyhow!(
+            "No loopback device found. Please install BlackHole or configure a loopback device."
+        ))?;
+
+    info!("Using loopback device for system audio: {}", loopback_device.name);
+    
+    // Configure audio capture to use the loopback device
+    let mut system_config = config;
+    system_config.device_id = Some(loopback_device.id.clone());
+    
+    // Start capture using CPAL with the loopback device
+    let stream = cpal_capture.start_capture(system_config).await?;
+    
+    // Replace the stream control with our macOS-specific one
+    let macos_control = Arc::new(MacOSSystemCapture::new());
+    macos_control.running.store(true, Ordering::Relaxed);
+    
+    Ok(AudioStream::new(stream.receiver, macos_control))
+}
+
+/// Check if a loopback device is available for system audio capture
+async fn check_loopback_device_available() -> Result<bool> {
+    let cpal_capture = crate::capture::CpalAudioCapture::new()?;
+    let devices = cpal_capture.list_devices().await?;
+    
+    let has_loopback = devices.iter().any(|d| {
+        let name_lower = d.name.to_lowercase();
+        name_lower.contains("blackhole") 
+            || name_lower.contains("loopback")
+            || name_lower.contains("soundflower")
+            || name_lower.contains("virtual")
     });
-
-    // Start the audio unit
-    start_audio_unit(capture_unit).await?;
-
-    Ok(AudioStream::new(rx, stream_control))
+    
+    Ok(has_loopback)
 }
 
 /// Check if macOS version supports system audio capture
 fn check_macos_version() -> Result<bool> {
-    // For now, assume it's supported
-    // In a real implementation, this would check the actual macOS version
+    // System audio capture is available on all supported macOS versions
+    // when using a loopback device approach
     Ok(true)
 }
 
 /// Check if audio capture permissions are granted
 async fn check_audio_permissions() -> Result<bool> {
-    // This would use AVCaptureDevice.authorizationStatus or similar
-    // For now, assume permissions are granted
+    // For loopback device approach, we use standard audio input permissions
+    // which are handled by CPAL
     Ok(true)
-}
-
-/// Create Core Audio unit for system audio capture
-async fn create_system_audio_unit(
-    config: AudioConfig,
-    tx: mpsc::Sender<AudioSample>,
-    running: Arc<AtomicBool>,
-) -> Result<SystemAudioUnit> {
-    // This would create an AudioUnit configured for system audio capture
-    // using kAudioUnitSubType_HALOutput with appropriate input scope
-    
-    Ok(SystemAudioUnit {
-        tx,
-        running,
-        config,
-    })
-}
-
-/// Start the Core Audio unit
-async fn start_audio_unit(_unit: SystemAudioUnit) -> Result<()> {
-    // This would start the AudioUnit
-    info!("Started Core Audio unit for system capture");
-    Ok(())
-}
-
-/// Wrapper for Core Audio unit
-struct SystemAudioUnit {
-    tx: mpsc::Sender<AudioSample>,
-    running: Arc<AtomicBool>,
-    config: AudioConfig,
-}
-
-impl SystemAudioUnit {
-    /// Audio input callback (would be called by Core Audio)
-    fn audio_input_callback(&self, audio_data: &[f32]) {
-        if !self.running.load(Ordering::Relaxed) {
-            return;
-        }
-
-        let sample = AudioSample {
-            data: audio_data.to_vec(),
-            timestamp: chrono::Utc::now(),
-            sample_rate: self.config.sample_rate,
-            channels: self.config.channels,
-        };
-
-        if let Err(e) = self.tx.try_send(sample) {
-            warn!("Failed to send system audio sample: {}", e);
-        }
-    }
 }
 
 /// Request audio capture permissions
 pub async fn request_audio_permissions() -> Result<bool> {
-    // This would show the system permission dialog
-    // Implementation would use AVCaptureDevice.requestAccess or similar
-    info!("Requesting audio capture permissions");
+    info!("Audio capture permissions will be requested when starting capture");
     Ok(true)
 }
 
-/// Get list of available audio devices using Core Audio
+/// Get list of available audio devices using CPAL (includes loopback devices)
 pub async fn get_core_audio_devices() -> Result<Vec<crate::AudioDevice>> {
-    // This would enumerate Audio Hardware devices
-    // using AudioObjectGetPropertyData with kAudioHardwarePropertyDevices
-    Ok(vec![])
+    let cpal_capture = crate::capture::CpalAudioCapture::new()?;
+    cpal_capture.list_devices().await
 }
-
-// Mock implementations for now - in a real implementation these would use
-// Core Audio APIs through either direct FFI or a library like core-audio-rs
 
 #[cfg(test)]
 mod tests {
@@ -174,6 +144,12 @@ mod tests {
     #[tokio::test]
     async fn test_permission_check() {
         let result = check_audio_permissions().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_loopback_device_check() {
+        let result = check_loopback_device_available().await;
         assert!(result.is_ok());
     }
 }

@@ -48,7 +48,15 @@ pub fn run() {
             unregister_global_hotkeys,
             get_overlay_state,
             set_overlay_state,
-            test_hotkey
+            test_hotkey,
+            // System audio commands
+            check_system_audio_status,
+            setup_system_audio,
+            start_audio_daemon,
+            stop_audio_daemon,
+            list_captures,
+            search_captures,
+            get_daemon_logs
         ])
         .on_menu_event(|app, event| {
             match event.id().as_ref() {

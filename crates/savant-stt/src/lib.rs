@@ -5,7 +5,6 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use async_trait::async_trait;
 
 pub mod whisper;
@@ -97,7 +96,6 @@ pub fn create_speech_to_text() -> Result<Box<dyn SpeechToText>> {
 
 /// Utility functions for audio preprocessing
 pub mod audio_utils {
-    use super::*;
 
     /// Ensure audio is in correct format for Whisper (16kHz, mono, f32)
     pub fn prepare_audio_for_whisper(audio_data: &[f32], sample_rate: u32, channels: u16) -> Vec<f32> {

@@ -1,6 +1,6 @@
 //! Whisper speech-to-text implementation
 
-use crate::{SpeechToText, SttConfig, TranscriptionResult, TranscriptionSegment, WordTimestamp};
+use crate::{SpeechToText, SttConfig, TranscriptionResult, TranscriptionSegment};
 use anyhow::{anyhow, Result};
 use std::time::Instant;
 use tracing::{debug, info, warn};

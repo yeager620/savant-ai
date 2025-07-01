@@ -159,3 +159,58 @@ pub fn prepare_for_whisper(samples: &[f32], source_rate: u32, target_rate: u32) 
 
     output
 }
+
+/// Audio buffer configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioBufferConfig {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub max_duration_seconds: f32,
+}
+
+/// Audio buffer for accumulating samples
+pub struct AudioBuffer {
+    config: AudioBufferConfig,
+    samples: Vec<f32>,
+    max_samples: usize,
+}
+
+impl AudioBuffer {
+    pub fn new(config: AudioBufferConfig) -> Self {
+        let max_samples = (config.sample_rate as f32 * config.max_duration_seconds * config.channels as f32) as usize;
+        Self {
+            config,
+            samples: Vec::with_capacity(max_samples),
+            max_samples,
+        }
+    }
+
+    pub fn push(&mut self, sample: &AudioSample) {
+        // Ensure we don't exceed max capacity
+        let remaining_capacity = self.max_samples.saturating_sub(self.samples.len());
+        let samples_to_add = sample.data.len().min(remaining_capacity);
+        
+        self.samples.extend_from_slice(&sample.data[..samples_to_add]);
+    }
+
+    pub fn get_sample(&self) -> AudioSample {
+        AudioSample {
+            data: self.samples.clone(),
+            timestamp: chrono::Utc::now(),
+            sample_rate: self.config.sample_rate,
+            channels: self.config.channels,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.samples.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
+}

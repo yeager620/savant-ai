@@ -164,21 +164,57 @@ impl AudioCapture for CpalAudioCapture {
 
         debug!("Using audio device: {}", device.name().unwrap_or_default());
 
-        // Configure stream
-        let stream_config = StreamConfig {
-            channels: config.channels,
-            sample_rate: cpal::SampleRate(config.sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(config.buffer_size as u32),
+        // Get supported configurations and find a compatible one
+        let supported_configs: Vec<_> = device
+            .supported_input_configs()
+            .map_err(|e| anyhow!("Failed to get supported configs: {}", e))?
+            .collect();
+
+        if supported_configs.is_empty() {
+            return Err(anyhow!("No supported input configurations found"));
+        }
+
+        // Try to find a config that matches our requirements, or pick the first available
+        let target_sample_rate = cpal::SampleRate(config.sample_rate);
+        let selected_config = supported_configs
+            .iter()
+            .find(|cfg| {
+                cfg.channels() >= config.channels 
+                    && cfg.min_sample_rate() <= target_sample_rate 
+                    && cfg.max_sample_rate() >= target_sample_rate
+            })
+            .or_else(|| supported_configs.first())
+            .ok_or_else(|| anyhow!("No compatible audio configuration found"))?;
+
+        // Use the selected configuration's sample rate if our target isn't supported
+        let actual_sample_rate = if target_sample_rate >= selected_config.min_sample_rate() 
+            && target_sample_rate <= selected_config.max_sample_rate() {
+            target_sample_rate
+        } else {
+            selected_config.max_sample_rate()
         };
+
+        let stream_config = StreamConfig {
+            channels: selected_config.channels().min(config.channels),
+            sample_rate: actual_sample_rate,
+            buffer_size: cpal::BufferSize::Default, // Use default instead of fixed
+        };
+
+        info!("Selected audio config: {} channels, {} Hz", stream_config.channels, stream_config.sample_rate.0);
 
         let (tx, rx) = mpsc::channel(100);
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
+        
+        // Store stream config values for callbacks
+        let callback_sample_rate = stream_config.sample_rate.0;
+        let callback_channels = stream_config.channels;
 
         // Create stream based on format
         let stream = match config.format {
             SampleFormat::F32 => {
                 let tx = tx.clone();
+                let running_clone = running_clone.clone();
                 device.build_input_stream(
                     &stream_config,
                     move |data: &[f32], _: &cpal::InputCallbackInfo| {
@@ -186,8 +222,8 @@ impl AudioCapture for CpalAudioCapture {
                             let sample = AudioSample {
                                 data: data.to_vec(),
                                 timestamp: chrono::Utc::now(),
-                                sample_rate: config.sample_rate,
-                                channels: config.channels,
+                                sample_rate: callback_sample_rate,
+                                channels: callback_channels,
                             };
                             
                             if let Err(e) = tx.try_send(sample) {
@@ -214,8 +250,8 @@ impl AudioCapture for CpalAudioCapture {
                             let sample = AudioSample {
                                 data: f32_data,
                                 timestamp: chrono::Utc::now(),
-                                sample_rate: config.sample_rate,
-                                channels: config.channels,
+                                sample_rate: callback_sample_rate,
+                                channels: callback_channels,
                             };
                             
                             if let Err(e) = tx.try_send(sample) {
