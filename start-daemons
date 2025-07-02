@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience wrapper for starting all daemons
+exec "$(dirname "$0")/scripts/daemon-management/start_all_daemons.sh" "$@"

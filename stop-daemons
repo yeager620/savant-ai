@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience wrapper for stopping all daemons
+exec "$(dirname "$0")/scripts/daemon-management/stop_all_daemons.sh" "$@"

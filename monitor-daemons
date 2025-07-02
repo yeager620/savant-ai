@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience wrapper for monitoring daemons
+exec "$(dirname "$0")/scripts/daemon-management/monitor_daemons.sh" "$@"

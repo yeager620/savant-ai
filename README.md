@@ -19,21 +19,66 @@ Invisible AI assistant with multimodal intelligence: real-time audio transcripti
 ## Quick Start
 
 ```bash
-# Dependencies
-brew install ollama tesseract
+# Install dependencies
+brew install ollama tesseract imagemagick
 ollama pull devstral && ollama serve
 
-# Run application
+# Clone and setup
 git clone <repo> && cd savant-ai
+
+# Start all multimodal systems
+./start-daemons                   # Audio + Video + AI analysis
+
+# Monitor system status
+./monitor-daemons                 # Real-time dashboard
+
+# Test everything is working
+./test-systems                    # Comprehensive test suite
+
+# Run main application
 cargo tauri dev
-
-# Test multimodal CLI tools
-./scripts/tests/test-mcp-natural-queries.sh  # MCP + LLM integration
-./scripts/tests/test-database-sql.sh         # Direct database access
-
-# Video capture daemon
-./sav-video start
 ```
+
+## **Integrated Daemon Management**
+
+### **One-Command Operations**
+```bash
+# Convenience commands (recommended)
+./start-daemons                 # Start audio + video + multimodal analysis
+./stop-daemons                  # Stop all daemons gracefully
+./monitor-daemons               # Real-time monitoring dashboard  
+./test-systems                  # Test all components
+
+# Full script paths
+./scripts/daemon-management/start_all_daemons.sh
+./scripts/daemon-management/stop_all_daemons.sh
+./scripts/daemon-management/restart_daemons.sh
+./scripts/daemon-management/monitor_daemons.sh
+./scripts/daemon-management/test_all_systems.sh
+```
+
+### **What Each Script Does**
+
+#### **start_all_daemons.sh**
+- Checks dependencies (ollama, tesseract, imagemagick)
+- Installs devstral model if missing
+- Starts Ollama server
+- Launches audio daemon
+- Launches video daemon with OCR + vision + correlation
+- Shows status verification
+
+#### **monitor_daemons.sh**  
+- Real-time daemon status monitoring
+- System resource usage
+- Recent log entries from both daemons
+- Auto-refreshes every 5 seconds
+
+#### **test_all_systems.sh**
+- Verifies all dependencies installed
+- Tests Ollama connectivity
+- Tests each component (OCR, vision, sync)
+- Tests with sample images if available
+- Database connectivity check
 
 ## CLI Tools
 
@@ -103,12 +148,17 @@ cargo run --package savant-sync -- test --count 20
 
 #### Video Capture System (sav-video)
 ```bash
-# Daemon management
+# Individual daemon management
 ./sav-video start --interval 30 --enable-ocr --enable-vision --enable-correlation
 ./sav-video status
 ./sav-video logs
 ./sav-video stop
 ./sav-video test
+
+# Integrated management (recommended)
+./start-daemons                  # Start both audio and video daemons
+./monitor-daemons                # Monitor all systems in real-time
+./stop-daemons                   # Stop all daemons
 ```
 
 #### Database Management (savant-db)
@@ -221,6 +271,27 @@ cargo run --package savant-db -- --help
 - Audio transcription preferences  
 - Browser monitoring configuration
 - Stealth mode options
+
+## Script Organization
+
+All management scripts are organized in `scripts/daemon-management/` with convenience wrappers in the project root:
+
+```
+scripts/
+├── daemon-management/          # Integrated system management
+│   ├── start_all_daemons.sh   # Complete startup sequence
+│   ├── stop_all_daemons.sh    # Graceful shutdown
+│   ├── restart_daemons.sh     # Clean restart
+│   ├── monitor_daemons.sh     # Real-time dashboard
+│   └── test_all_systems.sh    # Comprehensive testing
+├── audio/                     # Audio daemon scripts
+├── video/                     # Video daemon scripts
+├── tests/                     # Integration tests
+└── setup/                     # Installation scripts
+
+# Convenience commands (project root)
+start-daemons, stop-daemons, monitor-daemons, test-systems
+```
 
 ## Platform Requirements
 
