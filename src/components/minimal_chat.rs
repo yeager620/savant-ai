@@ -200,7 +200,8 @@ pub fn MinimalChat(
                                 title="Open Database Query Interface"
                                 on:click=move |_| handler()
                             >
-                                "DB"
+                                <span class="db-icon">{"⌘"}</span>
+                                <span class="db-text">{"DB"}</span>
                             </button>
                         }
                     })}

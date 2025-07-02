@@ -177,7 +177,19 @@ pub fn TaskbarApp() -> impl IntoView {
             <Show when=move || app_mode.get() == AppMode::Database>
                 <div class="database-mode">
                     <div class="database-header">
-                        <h3>"Database Query Interface"</h3>
+                        <div class="header-left">
+                            <h3>"Database Query Interface"</h3>
+                            <div class="db-status">
+                                <span class="status-dot"></span>
+                                <span class="status-text">"Connected"</span>
+                            </div>
+                        </div>
+                        <div class="header-right">
+                            <div class="db-info">
+                                <span class="db-info-label">"SQLite"</span>
+                                <span class="db-info-value">"v3"</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="database-content">
                         <NaturalQueryInterface />
@@ -634,41 +646,186 @@ pub fn TaskbarApp() -> impl IntoView {
                     display: flex;
                     flex-direction: column;
                     height: 100%;
-                    padding: 12px;
+                    padding: 16px;
+                    background: rgba(16, 16, 16, 0.95);
+                    backdrop-filter: blur(20px) saturate(180%);
+                    border-radius: 8px;
+                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+                    animation: fade-in 0.3s ease-out;
+                }
+
+                @keyframes fade-in {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
                 }
 
                 .database-header {
                     display: flex;
                     justify-content: space-between;
-                    align-items: center;
-                    padding: 8px 0;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                    margin-bottom: 12px;
+                    align-items: flex-start;
+                    padding: 0 0 12px 0;
+                    border-bottom: 1px solid rgba(80, 250, 123, 0.2);
+                    margin-bottom: 16px;
+                    position: relative;
+                }
+
+                .database-header::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -1px;
+                    left: 0;
+                    width: 100px;
+                    height: 1px;
+                    background: linear-gradient(90deg, rgba(80, 250, 123, 0.8), rgba(80, 250, 123, 0));
+                }
+
+                .header-left {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+
+                .header-right {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-end;
                 }
 
                 .database-header h3 {
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #ffffff;
+                    font-size: 15px;
+                    font-weight: 500;
+                    color: rgba(80, 250, 123, 0.9);
                     margin: 0;
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    letter-spacing: 0.5px;
+                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+                }
+
+                .db-status {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-top: 2px;
+                }
+
+                .status-dot {
+                    width: 8px;
+                    height: 8px;
+                    background-color: rgba(80, 250, 123, 0.8);
+                    border-radius: 50%;
+                    box-shadow: 0 0 4px rgba(80, 250, 123, 0.5);
+                    animation: pulse 2s infinite;
+                }
+
+                .status-text {
+                    font-size: 10px;
+                    color: rgba(255, 255, 255, 0.7);
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                }
+
+                .db-info {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-end;
+                    gap: 2px;
+                }
+
+                .db-info-label {
+                    font-size: 10px;
+                    color: rgba(255, 255, 255, 0.5);
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                }
+
+                .db-info-value {
+                    font-size: 10px;
+                    color: rgba(80, 250, 123, 0.7);
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
                 }
 
                 .database-content {
                     flex: 1;
                     overflow: hidden;
+                    background: linear-gradient(to bottom, rgba(28, 30, 32, 0.7), rgba(24, 26, 27, 0.5));
+                    border-radius: 8px;
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+                    padding: 1px;
+                    position: relative;
+                }
+
+                .database-content::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 1px;
+                    background: linear-gradient(90deg, 
+                        rgba(80, 250, 123, 0.1), 
+                        rgba(80, 250, 123, 0.2) 20%, 
+                        rgba(80, 250, 123, 0.1) 40%, 
+                        rgba(255, 255, 255, 0.05) 60%);
+                    border-top-left-radius: 8px;
+                    border-top-right-radius: 8px;
                 }
 
                 .database-controls {
-                    margin-top: auto;
-                    padding-top: 12px;
+                    margin-top: 16px;
+                    padding-top: 0;
                 }
 
                 .database-toggle {
-                    background: rgba(79, 70, 229, 0.8) !important;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    background: rgba(40, 42, 54, 0.8);
+                    border: 1px solid rgba(80, 250, 123, 0.3);
+                    color: rgba(80, 250, 123, 0.9);
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    letter-spacing: 0.5px;
+                    position: relative;
+                    top: -1px;
+                    transition: all 0.2s ease;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+                }
+
+                .db-icon {
+                    font-size: 12px;
+                    opacity: 0.8;
+                    margin-right: 1px;
+                }
+
+                .db-text {
+                    position: relative;
+                    top: -1px;
                 }
 
                 .database-toggle:hover {
-                    background: rgba(79, 70, 229, 1) !important;
+                    background: rgba(40, 42, 54, 0.9);
+                    border-color: rgba(80, 250, 123, 0.5);
+                    color: rgba(80, 250, 123, 1);
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                }
+
+                .database-toggle:hover .db-icon {
+                    opacity: 1;
+                }
+
+                .database-toggle:active {
+                    transform: translateY(0);
+                    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
                 }
 
                 /* Browser Mode Styles */
@@ -799,18 +956,32 @@ pub fn TaskbarApp() -> impl IntoView {
 
                 .back-btn {
                     width: 100%;
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    background: rgba(40, 42, 54, 0.8);
+                    border: 1px solid rgba(80, 250, 123, 0.3);
                     border-radius: 6px;
-                    padding: 8px;
-                    color: white;
-                    font-size: 11px;
+                    padding: 10px;
+                    color: rgba(80, 250, 123, 0.9);
+                    font-size: 12px;
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    font-weight: 500;
+                    letter-spacing: 0.5px;
                     cursor: pointer;
                     transition: all 0.2s ease;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
                 }
 
                 .back-btn:hover {
-                    background: rgba(255, 255, 255, 0.15);
+                    background: rgba(40, 42, 54, 0.9);
+                    border-color: rgba(80, 250, 123, 0.5);
+                    color: rgba(80, 250, 123, 1);
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                }
+
+                .back-btn:active {
+                    transform: translateY(0);
+                    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
                 }
                 "
             </style>
