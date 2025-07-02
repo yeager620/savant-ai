@@ -15,13 +15,17 @@ pub mod speaker_identification;
 pub mod semantic_search;
 pub mod security;
 pub mod natural_query;
+pub mod llm_client;
 pub mod mcp_server;
+pub mod mcp_server_tools;
+pub mod mcp_server_prompts;
 
 pub use speaker_identification::{Speaker, SpeakerIdentifier, SpeakerMatch, MatchMethod};
 pub use semantic_search::{SemanticSearchEngine, SearchResult, ConversationAnalysis, Topic};
-pub use security::{QuerySecurityManager, SecurityError};
-pub use natural_query::{NaturalLanguageQueryParser, QueryIntent, IntentType, QueryResult};
-pub use mcp_server::{MCPServer, MCPRequest, MCPResponse};
+pub use security::{QuerySecurityManager, SecurityError, QueryComplexity};
+pub use natural_query::{NaturalLanguageQueryParser, QueryIntent, IntentType, QueryResult, QueryProcessor, ConversationContextManager, QueryOptimizer, UserFeedback, LLMQueryResult};
+pub use llm_client::{LLMClient, LLMClientFactory, LLMConfig, OllamaClient, OpenAIClient, MockLLMClient};
+pub use mcp_server::{MCPServer, MCPRequest, MCPResponse, MCPTransport, StdioTransport};
 
 /// Database connection manager with speaker identification and semantic search
 pub struct TranscriptDatabase {
@@ -106,6 +110,11 @@ impl TranscriptDatabase {
         
         // Run LLM integration migration
         sqlx::query(include_str!("../migrations/003_llm_integration.sql"))
+            .execute(&self.pool)
+            .await?;
+        
+        // Run database optimizations migration
+        sqlx::query(include_str!("../migrations/004_database_optimizations.sql"))
             .execute(&self.pool)
             .await?;
         
@@ -457,5 +466,74 @@ impl TranscriptDatabase {
         } else {
             Ok(Vec::new())
         }
+    }
+    
+    /// Get a single conversation by ID
+    pub async fn get_conversation(&self, conversation_id: &str) -> Result<Option<serde_json::Value>> {
+        let row = sqlx::query(
+            r#"SELECT c.id, c.title, c.start_time, c.end_time, c.context,
+                      COUNT(s.id) as segment_count,
+                      SUM(s.end_time - s.start_time) as total_duration,
+                      GROUP_CONCAT(DISTINCT s.speaker) as participants
+               FROM conversations c
+               LEFT JOIN segments s ON c.id = s.conversation_id
+               WHERE c.id = ?
+               GROUP BY c.id"#
+        )
+        .bind(conversation_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        
+        if let Some(row) = row {
+            let participants_str: Option<String> = row.get("participants");
+            let participants = participants_str
+                .map(|s| s.split(',').map(|p| p.trim().to_string()).collect::<Vec<_>>())
+                .unwrap_or_default();
+            
+            Ok(Some(serde_json::json!({
+                "id": row.get::<String, _>("id"),
+                "title": row.get::<Option<String>, _>("title"),
+                "start_time": row.get::<chrono::DateTime<chrono::Utc>, _>("start_time"),
+                "end_time": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("end_time"),
+                "context": row.get::<Option<String>, _>("context"),
+                "participants": participants,
+                "segment_count": row.get::<i64, _>("segment_count"),
+                "total_duration": row.get::<Option<f64>, _>("total_duration").unwrap_or(0.0)
+            })))
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Get all segments for a conversation
+    pub async fn get_conversation_segments(&self, conversation_id: &str) -> Result<Vec<serde_json::Value>> {
+        let rows = sqlx::query(
+            r#"SELECT id, speaker, text, processed_text, timestamp, confidence, 
+                      start_time, end_time
+               FROM segments 
+               WHERE conversation_id = ?
+               ORDER BY timestamp ASC"#
+        )
+        .bind(conversation_id)
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let segments = rows
+            .into_iter()
+            .map(|row| {
+                serde_json::json!({
+                    "id": row.get::<String, _>("id"),
+                    "speaker": row.get::<Option<String>, _>("speaker"),
+                    "text": row.get::<String, _>("text"),
+                    "processed_text": row.get::<Option<String>, _>("processed_text"),
+                    "timestamp": row.get::<chrono::DateTime<chrono::Utc>, _>("timestamp"),
+                    "confidence": row.get::<Option<f64>, _>("confidence"),
+                    "start_time": row.get::<Option<f64>, _>("start_time"),
+                    "end_time": row.get::<Option<f64>, _>("end_time")
+                })
+            })
+            .collect();
+        
+        Ok(segments)
     }
 }

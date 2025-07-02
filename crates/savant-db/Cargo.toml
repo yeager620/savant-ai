@@ -24,6 +24,12 @@ regex = "1.10"
 sqlparser = "0.42"
 # Error handling
 thiserror = "1.0"
+# Async trait support  
+async-trait = "0.1"
+# HTTP client for LLM APIs
+reqwest = { version = "0.11", features = ["json"] }
+# Logging
+log = "0.4"
 
 [[bin]]
 name = "savant-db"

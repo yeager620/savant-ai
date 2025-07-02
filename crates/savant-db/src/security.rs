@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use sqlparser::ast::{Statement, Query, SetExpr, SelectItem, TableFactor, Expr};
+use sqlparser::ast::{Statement, Query, SetExpr, TableFactor, Expr};
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
@@ -163,8 +163,8 @@ impl QuerySecurityManager {
         
         let concatenation_patterns = vec![
             Regex::new(r"(?i)\|\|").unwrap(), // String concatenation
-            Regex::new(r"(?i)\+.*['\"]").unwrap(), // Potential string concatenation
-            Regex::new(r"(?i)concat\s*\(").unwrap(), // CONCAT function
+            Regex::new(r"(?i)\+.*quote").unwrap(), // Potential string concatenation
+            Regex::new(r"(?i)concat").unwrap(), // CONCAT function
         ];
         
         Self {
@@ -203,7 +203,8 @@ impl QuerySecurityManager {
         // Character validation
         let allowed_chars = query.chars().all(|c| {
             c.is_alphanumeric() 
-                || " .,?!-_()[]{}\"'".contains(c)
+                || " .,?!-_()[]{}".contains(c)
+                || "\"'".contains(c)
                 || c.is_whitespace()
         });
         

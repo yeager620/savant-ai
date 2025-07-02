@@ -3,17 +3,18 @@
 //! Provides intent classification, entity extraction, and query building for natural language queries
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Utc, NaiveDate};
+use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, Row, Column};
 use tokio::sync::RwLock;
 use uuid;
+use crate::llm_client::LLMClient;
 
 /// Intent types for natural language queries
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IntentType {
     FindConversations,
     AnalyzeSpeaker,
@@ -49,10 +50,38 @@ pub struct QueryIntent {
     pub original_query: String,
 }
 
-/// LLM trait for query processing
-#[async_trait::async_trait]
-pub trait LLMClient: Send + Sync {
-    async fn complete(&self, prompt: &str) -> Result<String>;
+/// LLM client enum for object safety
+#[derive(Debug, Clone)]
+pub enum LLMClientWrapper {
+    Ollama(crate::llm_client::OllamaClient),
+    OpenAI(crate::llm_client::OpenAIClient),
+    Mock(crate::llm_client::MockLLMClient),
+}
+
+impl LLMClientWrapper {
+    pub async fn complete(&self, prompt: &str) -> Result<String> {
+        match self {
+            Self::Ollama(client) => client.complete(prompt).await,
+            Self::OpenAI(client) => client.complete(prompt).await,
+            Self::Mock(client) => client.complete(prompt).await,
+        }
+    }
+    
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Ollama(client) => client.name(),
+            Self::OpenAI(client) => client.name(),
+            Self::Mock(client) => client.name(),
+        }
+    }
+    
+    pub fn is_available(&self) -> bool {
+        match self {
+            Self::Ollama(client) => client.is_available(),
+            Self::OpenAI(client) => client.is_available(),
+            Self::Mock(client) => client.is_available(),
+        }
+    }
 }
 
 /// Conversation context for follow-up queries
@@ -79,7 +108,7 @@ pub enum QueryComplexity {
 
 /// LLM-powered query processor (replacing regex-based approach)
 pub struct QueryProcessor {
-    llm_client: Option<Box<dyn LLMClient>>,
+    llm_client: Option<LLMClientWrapper>,
     simple_patterns: Vec<(Regex, String)>,
     context_manager: Arc<ConversationContextManager>,
     pool: SqlitePool,
@@ -174,7 +203,7 @@ impl ConversationContextManager {
 }
 
 impl QueryProcessor {
-    pub fn new(pool: SqlitePool, llm_client: Option<Box<dyn LLMClient>>) -> Self {
+    pub fn new(pool: SqlitePool, llm_client: Option<LLMClientWrapper>) -> Self {
         let simple_patterns = vec![
             (Regex::new(r"(?i)\b(statistics|stats|summary|overview|total)\b").unwrap(), "get_statistics".to_string()),
             (Regex::new(r"(?i)\b(list|show)\s+(speakers?|people)").unwrap(), "list_speakers".to_string()),

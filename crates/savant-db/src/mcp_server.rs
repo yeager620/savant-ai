@@ -3,6 +3,7 @@
 //! Provides standardized interface for LLMs to query the conversation database
 
 use anyhow::{anyhow, Result};
+use sqlx::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -11,7 +12,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::natural_query::{NaturalLanguageQueryParser, QueryResult};
+use crate::llm_client::{LLMClient, LLMClientFactory, LLMConfig};
+use crate::natural_query::{QueryProcessor, ConversationContextManager, QueryOptimizer, LLMQueryResult, LLMClientWrapper};
 use crate::security::QuerySecurityManager;
 use crate::TranscriptDatabase;
 
@@ -72,50 +74,138 @@ pub struct MCPSession {
     pub query_count: u64,
 }
 
-/// Main MCP server implementation
+/// Transport abstraction for MCP communication
+#[async_trait::async_trait]
+pub trait MCPTransport: Send + Sync {
+    async fn receive(&mut self) -> Result<MCPRequest>;
+    async fn send(&mut self, response: MCPResponse) -> Result<()>;
+}
+
+/// Stdio transport implementation
+pub struct StdioTransport {
+    reader: BufReader<tokio::io::Stdin>,
+    writer: tokio::io::Stdout,
+}
+
+/// Enhanced MCP server implementation with LLM integration
 pub struct MCPServer {
-    database: Arc<TranscriptDatabase>,
-    security: QuerySecurityManager,
-    query_parser: NaturalLanguageQueryParser,
-    sessions: Arc<Mutex<HashMap<String, MCPSession>>>,
+    pub database: Arc<TranscriptDatabase>,
+    pub security: QuerySecurityManager,
+    pub query_processor: QueryProcessor,
+    pub context_manager: Arc<ConversationContextManager>,
+    pub query_optimizer: QueryOptimizer,
+    pub llm_client: Option<LLMClientWrapper>,
+    pub sessions: Arc<Mutex<HashMap<String, MCPSession>>>,
+}
+
+impl StdioTransport {
+    pub fn new() -> Self {
+        Self {
+            reader: BufReader::new(tokio::io::stdin()),
+            writer: tokio::io::stdout(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl MCPTransport for StdioTransport {
+    async fn receive(&mut self) -> Result<MCPRequest> {
+        let mut line = String::new();
+        self.reader.read_line(&mut line).await
+            .map_err(|e| anyhow!("Failed to read from stdin: {}", e))?;
+        
+        if line.trim().is_empty() {
+            return Err(anyhow!("Empty request"));
+        }
+        
+        serde_json::from_str(line.trim())
+            .map_err(|e| anyhow!("Failed to parse JSON: {}", e))
+    }
+    
+    async fn send(&mut self, response: MCPResponse) -> Result<()> {
+        let json = serde_json::to_string(&response)
+            .map_err(|e| anyhow!("Failed to serialize response: {}", e))?;
+        
+        self.writer.write_all(json.as_bytes()).await
+            .map_err(|e| anyhow!("Failed to write to stdout: {}", e))?;
+        self.writer.write_all(b"\n").await
+            .map_err(|e| anyhow!("Failed to write newline: {}", e))?;
+        self.writer.flush().await
+            .map_err(|e| anyhow!("Failed to flush stdout: {}", e))?;
+        
+        Ok(())
+    }
 }
 
 impl MCPServer {
-    /// Create a new MCP server instance
-    pub fn new(database: Arc<TranscriptDatabase>) -> Result<Self> {
-        let pool = database.pool.clone(); // Assuming pool is accessible
-        let query_parser = NaturalLanguageQueryParser::new(pool);
+    /// Create a new enhanced MCP server instance
+    pub async fn new(database: Arc<TranscriptDatabase>, llm_configs: Option<Vec<LLMConfig>>) -> Result<Self> {
+        let pool = database.pool.clone();
+        
+        // Initialize LLM client
+        let llm_client = if let Some(configs) = llm_configs {
+            Some(LLMClientFactory::create_best_available(configs).await?)
+        } else {
+            // Try default Ollama config
+            let default_config = LLMConfig::default();
+            match LLMClientFactory::create_client(&default_config) {
+                Ok(client) => Some(client),
+                Err(_) => {
+                    log::warn!("No LLM client available, using pattern-based fallback");
+                    None
+                }
+            }
+        };
+        
+        let query_processor = QueryProcessor::new(pool.clone(), llm_client.clone());
+        let context_manager = Arc::new(ConversationContextManager::new());
+        let query_optimizer = QueryOptimizer::new(pool);
         let security = QuerySecurityManager::read_only();
         
         Ok(Self {
             database,
             security,
-            query_parser,
+            query_processor,
+            context_manager,
+            query_optimizer,
+            llm_client,
             sessions: Arc::new(Mutex::new(HashMap::new())),
         })
     }
     
-    /// Start the MCP server with stdio transport
-    pub async fn start_stdio_server(&self) -> Result<()> {
-        let stdin = tokio::io::stdin();
-        let mut stdout = tokio::io::stdout();
-        let mut reader = BufReader::new(stdin);
+    /// Create server with explicit LLM client
+    pub fn with_llm_client(database: Arc<TranscriptDatabase>, llm_client: LLMClientWrapper) -> Result<Self> {
+        let pool = database.pool.clone();
+        let query_processor = QueryProcessor::new(pool.clone(), Some(llm_client.clone()));
+        let context_manager = Arc::new(ConversationContextManager::new());
+        let query_optimizer = QueryOptimizer::new(pool);
+        let security = QuerySecurityManager::read_only();
+        
+        Ok(Self {
+            database,
+            security,
+            query_processor,
+            context_manager,
+            query_optimizer,
+            llm_client: Some(llm_client),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+        })
+    }
+    
+    /// Start the MCP server with specified transport
+    pub async fn start_server<T: MCPTransport>(&self, mut transport: T) -> Result<()> {
+        log::info!("Starting MCP server with enhanced query processing");
         
         loop {
-            let mut line = String::new();
-            match reader.read_line(&mut line).await {
-                Ok(0) => break, // EOF
-                Ok(_) => {
-                    if let Ok(request) = serde_json::from_str::<MCPRequest>(&line) {
-                        let response = self.handle_request(request).await;
-                        let response_json = serde_json::to_string(&response)?;
-                        stdout.write_all(response_json.as_bytes()).await?;
-                        stdout.write_all(b"\n").await?;
-                        stdout.flush().await?;
+            match transport.receive().await {
+                Ok(request) => {
+                    let response = self.handle_request(request).await;
+                    if let Err(e) = transport.send(response).await {
+                        log::error!("Failed to send response: {}", e);
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error reading from stdin: {}", e);
+                    log::error!("Failed to receive request: {}", e);
                     break;
                 }
             }
@@ -124,9 +214,19 @@ impl MCPServer {
         Ok(())
     }
     
-    /// Handle incoming MCP requests
+    /// Start the MCP server with stdio transport (convenience method)
+    pub async fn start_stdio_server(&self) -> Result<()> {
+        let transport = StdioTransport::new();
+        self.start_server(transport).await
+    }
+    
+    /// Handle incoming MCP requests with enhanced processing
     pub async fn handle_request(&self, request: MCPRequest) -> MCPResponse {
         let id = request.id.clone();
+        
+        // Log request for debugging
+        log::debug!("Handling MCP request: {} {}", request.method, 
+                   request.params.as_ref().map(|p| p.to_string()).unwrap_or_default());
         
         let result = match request.method.as_str() {
             "initialize" => self.handle_initialize(request.params).await,
@@ -134,28 +234,239 @@ impl MCPServer {
             "resources/read" => self.handle_read_resource(request.params).await,
             "tools/list" => self.handle_list_tools().await,
             "tools/call" => self.handle_call_tool(request.params).await,
-            "notifications/roots/list_changed" => Ok(json!({})), // Acknowledge notification
-            _ => Err(anyhow!("Unknown method: {}", request.method)),
+            "prompts/list" => self.handle_list_prompts().await,
+            "prompts/get" => self.handle_get_prompt(request.params).await,
+            _ => Err(anyhow!("Method not found: {}", request.method)),
         };
         
         match result {
-            Ok(result) => MCPResponse {
+            Ok(value) => MCPResponse {
                 jsonrpc: "2.0".to_string(),
                 id,
-                result: Some(result),
+                result: Some(value),
                 error: None,
             },
-            Err(e) => MCPResponse {
-                jsonrpc: "2.0".to_string(),
-                id,
-                result: None,
-                error: Some(MCPError {
-                    code: -1,
-                    message: e.to_string(),
-                    data: None,
-                }),
-            },
+            Err(e) => {
+                log::error!("Request failed: {}", e);
+                MCPResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id,
+                    result: None,
+                    error: Some(MCPError {
+                        code: -32603,
+                        message: e.to_string(),
+                        data: None,
+                    }),
+                }
+            }
         }
+    }
+    
+    /// Handle initialization request
+    async fn handle_initialize(&self, params: Option<Value>) -> Result<Value> {
+        let client_info = params.unwrap_or(json!({}));
+        let session_id = Uuid::new_v4().to_string();
+        
+        let session = MCPSession {
+            id: session_id.clone(),
+            client_info: Some(client_info),
+            capabilities: vec![
+                "resources".to_string(),
+                "tools".to_string(),
+                "prompts".to_string(),
+            ],
+            query_count: 0,
+        };
+        
+        let mut sessions = self.sessions.lock().await;
+        sessions.insert(session_id.clone(), session);
+        
+        Ok(json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "resources": {
+                    "subscribe": false,
+                    "listChanged": false
+                },
+                "tools": {
+                    "listChanged": false
+                },
+                "prompts": {
+                    "listChanged": false
+                }
+            },
+            "serverInfo": {
+                "name": "savant-ai-database",
+                "version": "1.0.0"
+            },
+            "sessionId": session_id
+        }))
+    }
+    
+    /// Handle list resources request
+    async fn handle_list_resources(&self) -> Result<Value> {
+        let resources = vec![
+            MCPResource {
+                uri: "conversations://list".to_string(),
+                name: "All Conversations".to_string(),
+                description: "List of all conversation transcripts".to_string(),
+                mime_type: "application/json".to_string(),
+                annotations: None,
+            },
+            MCPResource {
+                uri: "speakers://list".to_string(),
+                name: "All Speakers".to_string(),
+                description: "List of all speakers in the database".to_string(),
+                mime_type: "application/json".to_string(),
+                annotations: None,
+            },
+            MCPResource {
+                uri: "schema://database".to_string(),
+                name: "Database Schema".to_string(),
+                description: "Database schema and table definitions".to_string(),
+                mime_type: "application/json".to_string(),
+                annotations: None,
+            },
+        ];
+        
+        Ok(json!({ "resources": resources }))
+    }
+    
+    /// Handle read resource request
+    async fn handle_read_resource(&self, params: Option<Value>) -> Result<Value> {
+        let uri = params
+            .and_then(|p| p.get("uri"))
+            .and_then(|u| u.as_str())
+            .ok_or_else(|| anyhow!("Missing uri parameter"))?;
+        
+        match uri {
+            "conversations://list" => {
+                let conversations = self.database.list_conversations(50).await
+                    .map_err(|e| anyhow!("Failed to list conversations: {}", e))?;
+                
+                Ok(json!({
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&conversations)?
+                    }]
+                }))
+            }
+            "speakers://list" => {
+                let speakers = sqlx::query("SELECT DISTINCT speaker FROM segments WHERE speaker IS NOT NULL")
+                    .fetch_all(&self.database.pool)
+                    .await
+                    .map_err(|e| anyhow!("Failed to list speakers: {}", e))?;
+                
+                let speaker_names: Vec<String> = speakers
+                    .into_iter()
+                    .map(|row| row.try_get::<String, _>("speaker").unwrap_or_default())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                
+                Ok(json!({
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&speaker_names)?
+                    }]
+                }))
+            }
+            "schema://database" => {
+                let schema = json!({
+                    "conversations": {
+                        "columns": ["id", "title", "start_time", "end_time", "context"],
+                        "description": "Main conversation records"
+                    },
+                    "segments": {
+                        "columns": ["id", "conversation_id", "speaker", "text", "processed_text", "timestamp", "confidence", "start_time", "end_time"],
+                        "description": "Individual transcript segments"
+                    }
+                });
+                
+                Ok(json!({
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&schema)?
+                    }]
+                }))
+            }
+            _ => Err(anyhow!("Unknown resource URI: {}", uri))
+        }
+    }
+    
+    /// Handle list tools request
+    async fn handle_list_tools(&self) -> Result<Value> {
+        // Import tools from mcp_server_tools module
+        Ok(json!({
+            "tools": [
+                {
+                    "name": "query_conversations",
+                    "description": "Query conversations using natural language",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Natural language query to search conversations"
+                            },
+                            "session_id": {
+                                "type": "string",
+                                "description": "Optional session ID for context"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "get_speaker_analytics",
+                    "description": "Get analytics for speakers",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "speaker": {
+                                "type": "string",
+                                "description": "Optional specific speaker to analyze"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "search_semantic",
+                    "description": "Perform semantic search on conversation content",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of results",
+                                "default": 20
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "get_database_stats",
+                    "description": "Get database statistics and performance metrics",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "include_performance": {
+                                "type": "boolean",
+                                "description": "Include performance metrics",
+                                "default": false
+                            }
+                        }
+                    }
+                }
+            ]
+        }))
     }
     
     /// Handle initialize request
@@ -547,60 +858,86 @@ impl MCPServer {
     }
     
     /// Format query response for human-readable output
-    fn format_query_response(&self, result: &QueryResult) -> Result<String> {
-        let intent_desc = match result.intent.intent_type {
-            crate::natural_query::IntentType::FindConversations => "Found Conversations",
-            crate::natural_query::IntentType::AnalyzeSpeaker => "Speaker Analysis",
-            crate::natural_query::IntentType::SearchContent => "Content Search Results",
-            crate::natural_query::IntentType::GetStatistics => "Database Statistics",
+    fn format_query_response(&self, result: &LLMQueryResult) -> Result<String> {
+        let intent_desc = match result.intent.as_str() {
+            "find_conversations" => "Found Conversations",
+            "analyze_speaker" => "Speaker Analysis",
+            "search_content" => "Content Search Results",
+            "get_statistics" => "Database Statistics",
             _ => "Query Results",
         };
         
         let mut response = format!(
-            "{}\n(Query: \"{}\" | Results: {} | Time: {}ms)\n\n",
+            "{}\n(SQL: \"{}\" | Confidence: {:.1}%)\n\n",
             intent_desc,
-            result.intent.original_query,
-            result.result_count,
-            result.execution_time_ms
+            result.sql_query,
+            result.confidence * 100.0
         );
         
-        // Format results based on type
-        if let Some(array) = result.results.as_array() {
-            for (i, item) in array.iter().enumerate() {
-                if i >= 10 { // Limit output
-                    response.push_str(&format!("... and {} more results\n", array.len() - i));
-                    break;
-                }
-                
-                if let Some(obj) = item.as_object() {
-                    response.push_str(&format!("{}. ", i + 1));
-                    
-                    if let Some(title) = obj.get("title").and_then(|t| t.as_str()) {
-                        response.push_str(&format!("{} ", title));
-                    }
-                    
-                    if let Some(speaker) = obj.get("speaker").and_then(|s| s.as_str()) {
-                        response.push_str(&format!("(Speaker: {}) ", speaker));
-                    }
-                    
-                    if let Some(text) = obj.get("text").and_then(|t| t.as_str()) {
-                        let preview = text.chars().take(80).collect::<String>();
-                        response.push_str(&format!("- {}", preview));
-                        if text.len() > 80 {
-                            response.push_str("...");
-                        }
-                    }
-                    
-                    response.push('\n');
-                }
+        // Show SQL query parameters if any
+        if !result.parameters.is_empty() {
+            response.push_str("Parameters:\n");
+            for (key, value) in &result.parameters {
+                response.push_str(&format!("  {}: {}\n", key, value));
             }
-        } else if let Some(obj) = result.results.as_object() {
-            for (key, value) in obj {
-                response.push_str(&format!("• {}: {}\n", key, value));
-            }
+            response.push('\n');
         }
         
         Ok(response)
+    }
+    
+    /// Handle list prompts request
+    async fn handle_list_prompts(&self) -> Result<Value> {
+        Ok(json!({
+            "prompts": [
+                {
+                    "name": "conversation_summary",
+                    "description": "Generate a summary of conversation data",
+                    "arguments": [
+                        {
+                            "name": "conversation_id",
+                            "description": "ID of conversation to summarize",
+                            "required": true
+                        }
+                    ]
+                },
+                {
+                    "name": "speaker_analysis",
+                    "description": "Analyze speaker patterns and interactions",
+                    "arguments": [
+                        {
+                            "name": "speaker_name",
+                            "description": "Name of speaker to analyze",
+                            "required": false
+                        }
+                    ]
+                }
+            ]
+        }))
+    }
+    
+    /// Handle get prompt request
+    async fn handle_get_prompt(&self, params: Option<Value>) -> Result<Value> {
+        let name = params
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+            .ok_or_else(|| anyhow!("Prompt name is required"))?;
+            
+        match name {
+            "conversation_summary" => {
+                Ok(json!({
+                    "description": "Generate a detailed summary of conversation data",
+                    "prompt": "Based on the conversation data provided, generate a comprehensive summary including key topics discussed, main participants, sentiment analysis, and notable insights. Focus on actionable information and key takeaways."
+                }))
+            },
+            "speaker_analysis" => {
+                Ok(json!({
+                    "description": "Analyze speaker patterns and communication style", 
+                    "prompt": "Analyze the communication patterns of the specified speaker, including their speaking frequency, topics of interest, interaction patterns with other participants, and overall contribution to conversations. Provide insights into their communication style and engagement level."
+                }))
+            },
+            _ => Err(anyhow!("Unknown prompt: {}", name))
+        }
     }
 }
 
