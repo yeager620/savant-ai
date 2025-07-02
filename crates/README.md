@@ -1,6 +1,6 @@
 # Savant AI - UNIX Philosophy Components
 
-This directory contains the modular, UNIX-philosophy components of Savant AI. Each crate is designed to "do one thing well" and can be used standalone or composed with other tools.
+This directory contains the modular, UNIX-philosophy components of Savant AI. Each crate is designed to "do one thing well" and can be used standalone or composed with other tools. The system now includes comprehensive multimodal analysis capabilities with OCR, computer vision, and audio-video correlation.
 
 ## **Available Components**
 

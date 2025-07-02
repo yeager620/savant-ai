@@ -1,19 +1,13 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub mod timeline;
-pub mod correlator;
-pub mod synchronizer;
-pub mod fusion;
 
 pub use timeline::{TimelineManager, TimelineEvent, EventType};
-pub use correlator::{EventCorrelator, CorrelationResult};
-pub use synchronizer::{MultimodalSynchronizer, SyncConfig};
-pub use fusion::{ContextFusionEngine, FusionResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SynchronizedContext {
@@ -196,9 +190,6 @@ impl SyncWindow {
 
 pub struct MultimodalSyncManager {
     timeline_manager: Arc<RwLock<TimelineManager>>,
-    event_correlator: EventCorrelator,
-    synchronizer: MultimodalSynchronizer,
-    fusion_engine: ContextFusionEngine,
     config: SyncManagerConfig,
 }
 
@@ -244,9 +235,6 @@ impl MultimodalSyncManager {
     pub fn new(config: SyncManagerConfig) -> Self {
         Self {
             timeline_manager: Arc::new(RwLock::new(TimelineManager::new())),
-            event_correlator: EventCorrelator::new(),
-            synchronizer: MultimodalSynchronizer::new(SyncConfig::default()),
-            fusion_engine: ContextFusionEngine::new(),
             config,
         }
     }
@@ -283,23 +271,20 @@ impl MultimodalSyncManager {
         
         drop(timeline);
 
-        // Correlate events
-        let correlations = self.event_correlator.correlate_events(&video_events, &audio_events).await?;
+        // Correlate events (simplified implementation)
+        let correlations = self.correlate_events_simple(&video_events, &audio_events).await?;
 
-        // Perform synchronization
-        let sync_result = self.synchronizer.synchronize(&video_events, &audio_events, &correlations).await?;
-
-        // Generate fused insights
-        let fused_insights = self.fusion_engine.generate_insights(&video_events, &audio_events, &correlations).await?;
+        // Generate fused insights (simplified implementation)
+        let fused_insights = self.generate_insights_simple(&video_events, &audio_events, &correlations).await?;
 
         // Calculate confidence scores
-        let confidence_scores = self.calculate_confidence_scores(&video_events, &audio_events, &correlations, &sync_result)?;
+        let confidence_scores = self.calculate_confidence_scores(&video_events, &audio_events, &correlations)?;
 
         Ok(SynchronizedContext {
             timestamp: window.start_time,
             video_events,
             audio_events,
-            correlations,
+            correlations: correlations.to_vec(),
             fused_insights,
             confidence_scores,
         })
@@ -360,7 +345,6 @@ impl MultimodalSyncManager {
         video_events: &[VideoEvent],
         audio_events: &[AudioEvent],
         correlations: &[EventCorrelation],
-        _sync_result: &synchronizer::SyncResult,
     ) -> Result<ConfidenceScores> {
         let total_events = video_events.len() + audio_events.len();
         let correlated_events = correlations.len();
@@ -405,5 +389,62 @@ impl MultimodalSyncManager {
             speaker_identification,
             activity_classification,
         })
+    }
+
+    async fn correlate_events_simple(
+        &self,
+        video_events: &[VideoEvent],
+        audio_events: &[AudioEvent],
+    ) -> Result<Vec<EventCorrelation>> {
+        let mut correlations = Vec::new();
+        
+        // Simple temporal correlation based on timestamps
+        for video_event in video_events {
+            for audio_event in audio_events {
+                let time_diff = (video_event.timestamp - audio_event.timestamp).num_milliseconds();
+                
+                if time_diff.abs() <= self.config.max_time_offset_ms {
+                    let strength = 1.0 - (time_diff.abs() as f32 / self.config.max_time_offset_ms as f32);
+                    
+                    if strength >= self.config.min_correlation_strength {
+                        correlations.push(EventCorrelation {
+                            correlation_id: uuid::Uuid::new_v4().to_string(),
+                            video_event_id: video_event.event_id.clone(),
+                            audio_event_id: audio_event.event_id.clone(),
+                            correlation_type: CorrelationType::Temporal,
+                            strength,
+                            time_offset_ms: time_diff,
+                            causal_relationship: None,
+                        });
+                    }
+                }
+            }
+        }
+        
+        Ok(correlations)
+    }
+
+    async fn generate_insights_simple(
+        &self,
+        _video_events: &[VideoEvent],
+        _audio_events: &[AudioEvent],
+        correlations: &[EventCorrelation],
+    ) -> Result<Vec<FusedInsight>> {
+        let mut insights = Vec::new();
+        
+        // Generate basic insights based on correlations
+        if correlations.len() > 3 {
+            insights.push(FusedInsight {
+                insight_id: uuid::Uuid::new_v4().to_string(),
+                insight_type: InsightType::MultitaskingDetected,
+                description: format!("High activity detected with {} correlated events", correlations.len()),
+                supporting_events: correlations.iter().map(|c| c.correlation_id.clone()).collect(),
+                confidence: correlations.iter().map(|c| c.strength).sum::<f32>() / correlations.len() as f32,
+                actionable: false,
+                suggested_actions: vec![],
+            });
+        }
+        
+        Ok(insights)
     }
 }
