@@ -517,5 +517,459 @@ fn DatabaseStatsDisplay(stats: DatabaseStats) -> impl IntoView {
                 </div>
             </div>
         </div>
+
+        // Database Query Interface Styles
+        <style>
+            "
+            .natural-query-interface {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                padding: 12px;
+                background: transparent;
+            }
+
+            .tabs {
+                display: flex;
+                gap: 1px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 4px;
+                padding: 2px;
+                margin-bottom: 12px;
+            }
+
+            .tabs button {
+                flex: 1;
+                background: transparent;
+                border: none;
+                padding: 6px 10px;
+                color: rgba(255, 255, 255, 0.6);
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                font-size: 9px;
+                font-weight: 400;
+                letter-spacing: 0.3px;
+                cursor: pointer;
+                border-radius: 3px;
+                transition: all 0.15s ease;
+            }
+
+            .tabs button.active {
+                background: rgba(255, 255, 255, 0.1);
+                color: rgba(255, 255, 255, 0.9);
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+
+            .tabs button:hover:not(.active) {
+                background: rgba(255, 255, 255, 0.06);
+                color: rgba(255, 255, 255, 0.8);
+            }
+
+            .tab-content {
+                flex: 1;
+                overflow: hidden;
+            }
+
+            .tab-panel {
+                display: none;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            .tab-panel.active {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .query-section, .search-section, .stats-section {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .query-section h3, .search-section h3, .stats-section h3 {
+                font-size: 11px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.9);
+                margin: 0;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                letter-spacing: 0.3px;
+            }
+
+            .query-examples {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 9px;
+                color: rgba(255, 255, 255, 0.7);
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+            }
+
+            .query-examples p {
+                margin: 0 0 4px 0;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.8);
+            }
+
+            .query-examples ul {
+                margin: 0;
+                padding-left: 12px;
+                list-style: none;
+            }
+
+            .query-examples li {
+                margin: 2px 0;
+                position: relative;
+                padding-left: 8px;
+            }
+
+            .query-examples li::before {
+                content: '▸';
+                position: absolute;
+                left: 0;
+                color: rgba(255, 255, 255, 0.4);
+            }
+
+            .query-input {
+                display: flex;
+                gap: 8px;
+                align-items: flex-end;
+            }
+
+            .query-input textarea {
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                padding: 8px;
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 10px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                resize: none;
+                min-height: 60px;
+                max-height: 120px;
+            }
+
+            .query-input textarea::placeholder {
+                color: rgba(255, 255, 255, 0.4);
+            }
+
+            .query-input textarea:focus {
+                outline: none;
+                border-color: rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.08);
+            }
+
+            .query-button {
+                background: rgba(59, 130, 246, 0.8);
+                border: none;
+                border-radius: 4px;
+                padding: 8px 12px;
+                color: white;
+                font-size: 10px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                min-width: 50px;
+                height: 36px;
+            }
+
+            .query-button:hover:not(:disabled) {
+                background: rgba(59, 130, 246, 1);
+            }
+
+            .query-button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .query-results {
+                flex: 1;
+                overflow-y: auto;
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 4px;
+                padding: 10px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+            }
+
+            .result-header h4 {
+                font-size: 10px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.9);
+                margin: 0 0 6px 0;
+            }
+
+            .result-meta {
+                display: flex;
+                gap: 12px;
+                font-size: 8px;
+                color: rgba(255, 255, 255, 0.6);
+                margin-bottom: 8px;
+            }
+
+            .search-interface {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .search-input {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+
+            .search-input input {
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                padding: 8px;
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 10px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                height: 36px;
+            }
+
+            .search-input input::placeholder {
+                color: rgba(255, 255, 255, 0.4);
+            }
+
+            .search-input input:focus {
+                outline: none;
+                border-color: rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.08);
+            }
+
+            .search-input button {
+                background: rgba(59, 130, 246, 0.8);
+                border: none;
+                border-radius: 4px;
+                padding: 8px 12px;
+                color: white;
+                font-size: 10px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                height: 36px;
+            }
+
+            .search-results {
+                flex: 1;
+                overflow-y: auto;
+            }
+
+            .search-container {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 4px;
+                padding: 10px;
+                height: 100%;
+                overflow-y: auto;
+            }
+
+            .no-results {
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 9px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                text-align: center;
+                margin: 20px 0;
+            }
+
+            .results-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .search-result-item {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 3px;
+                padding: 8px;
+                font-size: 9px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+            }
+
+            .result-header {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 4px;
+            }
+
+            .speaker {
+                color: rgba(59, 130, 246, 0.9);
+                font-weight: 500;
+            }
+
+            .timestamp {
+                color: rgba(255, 255, 255, 0.5);
+                font-size: 8px;
+            }
+
+            .result-text {
+                color: rgba(255, 255, 255, 0.8);
+                margin: 0;
+                line-height: 1.3;
+            }
+
+            .confidence {
+                color: rgba(16, 185, 129, 0.8);
+                font-size: 8px;
+                margin-top: 4px;
+            }
+
+            .database-stats {
+                height: 100%;
+                overflow-y: auto;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+            }
+
+            .stats-overview {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .stat-card {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 4px;
+                padding: 8px;
+                text-align: center;
+            }
+
+            .stat-card h4 {
+                font-size: 9px;
+                font-weight: 400;
+                color: rgba(255, 255, 255, 0.7);
+                margin: 0 0 4px 0;
+                letter-spacing: 0.3px;
+            }
+
+            .stat-value {
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.9);
+            }
+
+            .top-speakers h4 {
+                font-size: 10px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.9);
+                margin: 0 0 8px 0;
+            }
+
+            .speakers-list {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 4px;
+                padding: 8px;
+            }
+
+            .speaker-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 4px 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                font-size: 9px;
+            }
+
+            .speaker-item:last-child {
+                border-bottom: none;
+            }
+
+            .speaker-name {
+                color: rgba(255, 255, 255, 0.9);
+                font-weight: 500;
+            }
+
+            .speaker-stats {
+                color: rgba(255, 255, 255, 0.6);
+            }
+
+            .loading {
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 9px;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                text-align: center;
+                margin: 20px 0;
+            }
+
+            .conversations-list, .speakers-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .conversation-item, .speaker-stats {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 3px;
+                padding: 8px;
+                font-size: 9px;
+            }
+
+            .conversation-item h5, .speaker-stats h5 {
+                margin: 0 0 4px 0;
+                font-size: 10px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.9);
+            }
+
+            .conversation-item p, .speaker-stats .stats-grid {
+                margin: 2px 0;
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 8px;
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+            }
+
+            .stat {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .stat label {
+                font-size: 7px;
+                color: rgba(255, 255, 255, 0.5);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .stat span {
+                font-size: 9px;
+                color: rgba(255, 255, 255, 0.8);
+                font-weight: 500;
+            }
+
+            .generic-results {
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+            }
+
+            .generic-results pre {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 3px;
+                padding: 8px;
+                font-size: 8px;
+                color: rgba(255, 255, 255, 0.8);
+                overflow-x: auto;
+                white-space: pre-wrap;
+                margin: 0;
+            }
+            "
+        </style>
     }
 }

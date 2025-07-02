@@ -647,11 +647,9 @@ pub fn TaskbarApp() -> impl IntoView {
                     flex-direction: column;
                     height: 100%;
                     padding: 16px;
-                    background: rgba(16, 16, 16, 0.95);
+                    background: rgba(16, 16, 16, 0.85);
                     backdrop-filter: blur(20px) saturate(180%);
-                    border-radius: 8px;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-                    animation: fade-in 0.3s ease-out;
+                    animation: fade-in 0.2s ease-out;
                 }
 
                 @keyframes fade-in {
@@ -669,9 +667,9 @@ pub fn TaskbarApp() -> impl IntoView {
                     display: flex;
                     justify-content: space-between;
                     align-items: flex-start;
-                    padding: 0 0 12px 0;
-                    border-bottom: 1px solid rgba(80, 250, 123, 0.2);
-                    margin-bottom: 16px;
+                    padding: 0 0 10px 0;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    margin-bottom: 14px;
                     position: relative;
                 }
 
@@ -680,9 +678,9 @@ pub fn TaskbarApp() -> impl IntoView {
                     position: absolute;
                     bottom: -1px;
                     left: 0;
-                    width: 100px;
+                    width: 40px;
                     height: 1px;
-                    background: linear-gradient(90deg, rgba(80, 250, 123, 0.8), rgba(80, 250, 123, 0));
+                    background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0));
                 }
 
                 .header-left {
@@ -698,13 +696,12 @@ pub fn TaskbarApp() -> impl IntoView {
                 }
 
                 .database-header h3 {
-                    font-size: 15px;
+                    font-size: 13px;
                     font-weight: 500;
-                    color: rgba(80, 250, 123, 0.9);
+                    color: rgba(255, 255, 255, 0.95);
                     margin: 0;
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
-                    letter-spacing: 0.5px;
-                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+                    letter-spacing: 0.3px;
                 }
 
                 .db-status {
@@ -715,18 +712,19 @@ pub fn TaskbarApp() -> impl IntoView {
                 }
 
                 .status-dot {
-                    width: 8px;
-                    height: 8px;
-                    background-color: rgba(80, 250, 123, 0.8);
+                    width: 6px;
+                    height: 6px;
+                    background-color: rgba(16, 185, 129, 0.9);
                     border-radius: 50%;
-                    box-shadow: 0 0 4px rgba(80, 250, 123, 0.5);
+                    box-shadow: 0 0 3px rgba(16, 185, 129, 0.4);
                     animation: pulse 2s infinite;
                 }
 
                 .status-text {
-                    font-size: 10px;
-                    color: rgba(255, 255, 255, 0.7);
+                    font-size: 9px;
+                    color: rgba(255, 255, 255, 0.6);
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    font-weight: 400;
                 }
 
                 .db-info {
@@ -737,25 +735,26 @@ pub fn TaskbarApp() -> impl IntoView {
                 }
 
                 .db-info-label {
-                    font-size: 10px;
-                    color: rgba(255, 255, 255, 0.5);
+                    font-size: 9px;
+                    color: rgba(255, 255, 255, 0.4);
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    font-weight: 400;
                 }
 
                 .db-info-value {
-                    font-size: 10px;
-                    color: rgba(80, 250, 123, 0.7);
+                    font-size: 9px;
+                    color: rgba(255, 255, 255, 0.7);
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+                    font-weight: 500;
                 }
 
                 .database-content {
                     flex: 1;
                     overflow: hidden;
-                    background: linear-gradient(to bottom, rgba(28, 30, 32, 0.7), rgba(24, 26, 27, 0.5));
-                    border-radius: 8px;
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
-                    padding: 1px;
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
                     position: relative;
                 }
 
@@ -767,12 +766,11 @@ pub fn TaskbarApp() -> impl IntoView {
                     right: 0;
                     height: 1px;
                     background: linear-gradient(90deg, 
-                        rgba(80, 250, 123, 0.1), 
-                        rgba(80, 250, 123, 0.2) 20%, 
-                        rgba(80, 250, 123, 0.1) 40%, 
-                        rgba(255, 255, 255, 0.05) 60%);
-                    border-top-left-radius: 8px;
-                    border-top-right-radius: 8px;
+                        rgba(255, 255, 255, 0.1), 
+                        rgba(255, 255, 255, 0.05) 50%, 
+                        rgba(255, 255, 255, 0) 100%);
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
                 }
 
                 .database-controls {
@@ -783,49 +781,51 @@ pub fn TaskbarApp() -> impl IntoView {
                 .database-toggle {
                     display: flex;
                     align-items: center;
-                    gap: 4px;
-                    background: rgba(40, 42, 54, 0.8);
-                    border: 1px solid rgba(80, 250, 123, 0.3);
-                    color: rgba(80, 250, 123, 0.9);
+                    gap: 3px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    color: rgba(255, 255, 255, 0.85);
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 11px;
-                    font-weight: 500;
-                    padding: 3px 8px;
+                    font-size: 10px;
+                    font-weight: 400;
+                    padding: 4px 8px;
                     border-radius: 4px;
-                    letter-spacing: 0.5px;
+                    letter-spacing: 0.3px;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    backdrop-filter: blur(10px);
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
                     position: relative;
-                    top: -1px;
-                    transition: all 0.2s ease;
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+                    text-shadow: none;
                 }
 
                 .db-icon {
-                    font-size: 12px;
-                    opacity: 0.8;
-                    margin-right: 1px;
+                    font-size: 11px;
+                    opacity: 0.7;
+                    font-weight: 400;
                 }
 
                 .db-text {
-                    position: relative;
-                    top: -1px;
+                    font-size: 10px;
+                    font-weight: 400;
+                    letter-spacing: 0.5px;
                 }
 
                 .database-toggle:hover {
-                    background: rgba(40, 42, 54, 0.9);
-                    border-color: rgba(80, 250, 123, 0.5);
-                    color: rgba(80, 250, 123, 1);
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    background: rgba(255, 255, 255, 0.12);
+                    border-color: rgba(255, 255, 255, 0.2);
+                    color: rgba(255, 255, 255, 1);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
                 }
 
                 .database-toggle:hover .db-icon {
-                    opacity: 1;
+                    opacity: 0.9;
                 }
 
                 .database-toggle:active {
-                    transform: translateY(0);
-                    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+                    background: rgba(255, 255, 255, 0.06);
+                    transform: translateY(0.5px);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
                 }
 
                 /* Browser Mode Styles */
@@ -956,32 +956,32 @@ pub fn TaskbarApp() -> impl IntoView {
 
                 .back-btn {
                     width: 100%;
-                    background: rgba(40, 42, 54, 0.8);
-                    border: 1px solid rgba(80, 250, 123, 0.3);
-                    border-radius: 6px;
-                    padding: 10px;
-                    color: rgba(80, 250, 123, 0.9);
-                    font-size: 12px;
+                    background: rgba(255, 255, 255, 0.06);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    color: rgba(255, 255, 255, 0.8);
+                    font-size: 11px;
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-weight: 500;
-                    letter-spacing: 0.5px;
+                    font-weight: 400;
+                    letter-spacing: 0.3px;
                     cursor: pointer;
-                    transition: all 0.2s ease;
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+                    transition: all 0.15s ease;
+                    backdrop-filter: blur(10px);
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                 }
 
                 .back-btn:hover {
-                    background: rgba(40, 42, 54, 0.9);
-                    border-color: rgba(80, 250, 123, 0.5);
-                    color: rgba(80, 250, 123, 1);
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                    background: rgba(255, 255, 255, 0.1);
+                    border-color: rgba(255, 255, 255, 0.15);
+                    color: rgba(255, 255, 255, 0.95);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
                 }
 
                 .back-btn:active {
-                    transform: translateY(0);
-                    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+                    background: rgba(255, 255, 255, 0.04);
+                    transform: translateY(0.5px);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
                 }
                 "
             </style>
