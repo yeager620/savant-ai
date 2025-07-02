@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}Building savant-mcp server...${NC}"
 cargo build --package savant-mcp --release
 
-MCP_SERVER="./target/release/savant-mcp"
+MCP_SERVER="./target/release/savant-mcp-server"
 
 # Check if server binary exists
 if [ ! -f "$MCP_SERVER" ]; then

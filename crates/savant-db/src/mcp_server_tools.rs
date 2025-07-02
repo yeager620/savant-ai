@@ -592,8 +592,9 @@ impl MCPServer {
             .and_then(|s| s.as_str())
             .unwrap_or("");
             
+        let default_results = json!({});
         let results = args.get("results")
-            .unwrap_or(&json!({}));
+            .unwrap_or(&default_results);
         
         let feedback = match feedback_str {
             "Good" => UserFeedback::Good,
@@ -620,11 +621,13 @@ impl MCPServer {
             .unwrap_or(3) as usize;
         
         let suggestions = self.query_optimizer.get_query_suggestions(partial_query).await;
+        let suggestion_count = suggestions.len().min(max_suggestions);
+        let limited_suggestions: Vec<_> = suggestions.into_iter().take(max_suggestions).collect();
         
         Ok(serde_json::to_string_pretty(&json!({
             "partial_query": partial_query,
-            "suggestions": suggestions.into_iter().take(max_suggestions).collect::<Vec<_>>(),
-            "suggestion_count": suggestions.len().min(max_suggestions)
+            "suggestions": limited_suggestions,
+            "suggestion_count": suggestion_count
         }))?)
     }
     
@@ -709,7 +712,7 @@ impl MCPServer {
         }))
     }
     
-    fn extract_result_ids(&self, results: &Value) -> Vec<String> {
+    fn extract_result_ids(&self, _results: &Value) -> Vec<String> {
         // Extract IDs from results for context management
         vec![]
     }

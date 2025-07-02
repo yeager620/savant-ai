@@ -166,9 +166,9 @@ impl SemanticSearchEngine {
     /// Enhanced semantic search (placeholder for future ML implementation)
     pub async fn semantic_search(
         &self,
-        query_embedding: &Array1<f32>,
-        limit: usize,
-        min_similarity: f32,
+        _query_embedding: &Array1<f32>,
+        _limit: usize,
+        _min_similarity: f32,
     ) -> Result<Vec<SearchResult>> {
         // For now, this returns empty results as a placeholder
         // In a full implementation, this would use sentence transformers

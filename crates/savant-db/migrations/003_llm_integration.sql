@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS query_history (
     user_feedback TEXT,
     success BOOLEAN DEFAULT TRUE,
     error_message TEXT,
-    timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Query intent classification patterns
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS query_intents (
     sql_template TEXT,
     required_parameters TEXT, -- JSON array of required parameters
     confidence_threshold REAL DEFAULT 0.7,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- MCP server session management
@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS mcp_sessions (
     id TEXT PRIMARY KEY,
     client_info TEXT, -- JSON with client details
     capabilities TEXT, -- JSON with supported features
-    started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    last_activity TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
     query_count INTEGER DEFAULT 0,
     active BOOLEAN DEFAULT TRUE
 );
@@ -85,8 +85,9 @@ INSERT OR IGNORE INTO query_intents (id, intent_name, description, example_queri
  'SELECT * FROM segments WHERE conversation_id = {conversation_id} ORDER BY timestamp',
  '["conversation_id"]');
 
--- Create full-text search virtual table for enhanced search
-CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts USING fts5(
+-- Drop existing FTS table and recreate with enhanced schema
+DROP TABLE IF EXISTS segments_fts;
+CREATE VIRTUAL TABLE segments_fts USING fts5(
     original_text,
     processed_text,
     speaker,
@@ -95,16 +96,16 @@ CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts USING fts5(
     contentless_delete=1
 );
 
--- Populate FTS table with existing data
-INSERT INTO segments_fts(original_text, processed_text, speaker, conversation_title)
-SELECT 
-    s.text,
-    COALESCE(s.processed_text, s.text),
-    s.speaker,
-    COALESCE(c.title, 'Untitled Conversation')
-FROM segments s
-LEFT JOIN conversations c ON s.conversation_id = c.id
-WHERE NOT EXISTS (SELECT 1 FROM segments_fts WHERE rowid = s.rowid);
+-- Populate FTS table with existing data (temporarily disabled due to parser issue)
+-- INSERT INTO segments_fts(original_text, processed_text, speaker, conversation_title)
+-- SELECT 
+--     s.text,
+--     COALESCE(s.processed_text, s.text),
+--     s.speaker,
+--     COALESCE(c.title, 'Untitled Conversation')
+-- FROM segments s
+-- LEFT JOIN conversations c ON s.conversation_id = c.id
+-- WHERE NOT EXISTS (SELECT 1 FROM segments_fts WHERE rowid = s.rowid);
 
 -- Triggers to maintain FTS table
 CREATE TRIGGER IF NOT EXISTS segments_fts_insert AFTER INSERT ON segments BEGIN

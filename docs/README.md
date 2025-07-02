@@ -34,9 +34,9 @@ savant-transcribe --speaker "user" --duration 10
 
 ### Database Queries
 ```bash
-savant-db list --limit 10
-savant-db query --speaker "john" --text "meeting"
-savant-db stats
+savant-db --db-path ~/.config/savant-ai/transcripts.db list --limit 10
+savant-db --db-path ./data.db query --speaker "john" --text "meeting"
+savant-db --db-path ~/.config/savant-ai/transcripts.db stats
 ```
 
 ### MCP Server
@@ -47,10 +47,10 @@ savant-mcp --llm-provider ollama  # Production
 
 ### Development
 ```bash
-cargo tauri dev               # Full app
-cargo test --workspace       # All tests
-./test-mcp-natural-queries.sh # MCP integration test
-./test-database-sql.sh        # Database test
+cargo tauri dev                              # Full app
+cargo test --workspace                      # All tests
+./scripts/tests/test-mcp-natural-queries.sh # MCP integration test
+./scripts/tests/test-database-sql.sh        # Database test
 ```
 
 ## Features

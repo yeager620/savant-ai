@@ -45,21 +45,21 @@ impl Default for LLMConfig {
 }
 
 /// Local Ollama client implementation
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OllamaClient {
     config: LLMConfig,
     client: reqwest::Client,
 }
 
 /// OpenAI-compatible client implementation
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OpenAIClient {
     config: LLMConfig,
     client: reqwest::Client,
 }
 
 /// Mock client for testing
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MockLLMClient {
     responses: HashMap<String, String>,
 }

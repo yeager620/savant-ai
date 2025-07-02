@@ -3,6 +3,7 @@
 //! Provides templated prompts for common conversation analysis tasks
 
 use anyhow::{anyhow, Result};
+use sqlx::Row;
 use serde_json::{json, Value};
 
 use crate::mcp_server::MCPServer;
@@ -120,8 +121,9 @@ impl MCPServer {
             .and_then(|n| n.as_str())
             .ok_or_else(|| anyhow!("Missing prompt name"))?;
             
+        let default_args = json!({});
         let arguments = params.get("arguments")
-            .unwrap_or(&json!({}));
+            .unwrap_or(&default_args);
         
         match prompt_name {
             "analyze_conversation" => self.prompt_analyze_conversation(arguments).await,
@@ -777,8 +779,8 @@ Format your response as a professional meeting preparation briefing."#,
         
         let mut action_items = Vec::new();
         
-        for pattern in action_patterns {
-            let search_query = if let Some(speaker_name) = speaker {
+        for pattern in &action_patterns {
+            let search_query = if let Some(_speaker_name) = speaker {
                 r#"
                     SELECT s.text, s.speaker, s.timestamp, c.title as conversation_title, c.id as conversation_id
                     FROM segments s

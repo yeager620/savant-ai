@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use sqlx::{SqlitePool, Row, Column};
+use sqlx::{SqlitePool, Row, Column, TypeInfo};
 use tokio::sync::RwLock;
 use uuid;
 use crate::llm_client::LLMClient;
@@ -360,7 +360,7 @@ impl NaturalLanguageQueryParser {
                         "title": row.get::<Option<String>, _>("title"),
                         "start_time": row.get::<DateTime<Utc>, _>("start_time"),
                         "participants": row.get::<Option<String>, _>("participants")
-                            .map(|s| s.split(',').map(|p| p.trim()).collect::<Vec<_>>())
+                            .map(|s| s.split(',').map(|p| p.trim().to_string()).collect::<Vec<_>>())
                             .unwrap_or_default(),
                         "segment_count": row.get::<i64, _>("segment_count"),
                         "total_duration": row.get::<Option<f64>, _>("total_duration").unwrap_or(0.0),
@@ -702,7 +702,7 @@ impl QueryOptimizer {
         &self, 
         query: &str, 
         sql_query: &str,
-        results: &serde_json::Value, 
+        _results: &serde_json::Value, 
         feedback: UserFeedback
     ) -> Result<()> {
         let mut history = self.feedback_history.write().await;

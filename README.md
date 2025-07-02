@@ -26,8 +26,8 @@ git clone <repo> && cd savant-ai
 cargo tauri dev
 
 # Test CLI tools
-./test-mcp-natural-queries.sh  # MCP + LLM integration
-./test-database-sql.sh         # Direct database access
+./scripts/tests/test-mcp-natural-queries.sh  # MCP + LLM integration
+./scripts/tests/test-database-sql.sh         # Direct database access
 ```
 
 ## CLI Tools
@@ -37,8 +37,8 @@ cargo tauri dev
 savant-transcribe --speaker "user" --duration 10
 
 # Database queries  
-savant-db list --limit 10
-savant-db query --speaker "john" --text "meeting"
+savant-db --db-path ~/.config/savant-ai/transcripts.db list --limit 10
+savant-db --db-path ./data.db query --speaker "john" --text "meeting"
 
 # LLM inference
 echo "prompt" | savant-llm --model devstral | jq '.content'
