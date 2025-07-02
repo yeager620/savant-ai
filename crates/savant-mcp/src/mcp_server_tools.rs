@@ -8,7 +8,7 @@ use std::time::Instant;
 use sqlx::Row;
 
 use crate::mcp_server::MCPServer;
-use crate::natural_query::UserFeedback;
+use savant_db::{UserFeedback, natural_query};
 
 impl MCPServer {
     /// Handle list tools request
@@ -702,7 +702,7 @@ impl MCPServer {
     
     // Helper methods
     
-    async fn execute_structured_query(&self, llm_result: &crate::natural_query::LLMQueryResult) -> Result<Value> {
+    async fn execute_structured_query(&self, llm_result: &natural_query::LLMQueryResult) -> Result<Value> {
         // This would execute the SQL query from the LLM result
         // For now, return a placeholder
         Ok(json!({
@@ -717,7 +717,7 @@ impl MCPServer {
         vec![]
     }
     
-    async fn format_query_results(&self, results: &Value, llm_result: &crate::natural_query::LLMQueryResult, original_query: &str) -> Result<String> {
+    async fn format_query_results(&self, results: &Value, llm_result: &natural_query::LLMQueryResult, original_query: &str) -> Result<String> {
         // Format results for LLM consumption
         Ok(serde_json::to_string_pretty(&json!({
             "original_query": original_query,

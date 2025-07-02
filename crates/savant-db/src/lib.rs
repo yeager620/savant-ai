@@ -17,16 +17,12 @@ pub mod semantic_search;
 pub mod security;
 pub mod natural_query;
 pub mod llm_client;
-pub mod mcp_server;
-pub mod mcp_server_tools;
-pub mod mcp_server_prompts;
 
 pub use speaker_identification::{Speaker, SpeakerIdentifier, SpeakerMatch, MatchMethod};
 pub use semantic_search::{SemanticSearchEngine, SearchResult, ConversationAnalysis, Topic};
 pub use security::{QuerySecurityManager, SecurityError, QueryComplexity};
 pub use natural_query::{NaturalLanguageQueryParser, QueryIntent, IntentType, QueryResult, QueryProcessor, ConversationContextManager, QueryOptimizer, UserFeedback, LLMQueryResult};
 pub use llm_client::{LLMClient, LLMClientFactory, LLMConfig, OllamaClient, OpenAIClient, MockLLMClient};
-pub use mcp_server::{MCPServer, MCPRequest, MCPResponse, MCPTransport, StdioTransport};
 
 /// Database connection manager with speaker identification and semantic search
 pub struct TranscriptDatabase {

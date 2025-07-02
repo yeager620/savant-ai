@@ -12,10 +12,13 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::llm_client::{LLMClientFactory, LLMConfig};
-use crate::natural_query::{QueryProcessor, ConversationContextManager, QueryOptimizer, LLMClientWrapper};
-use crate::security::QuerySecurityManager;
-use crate::TranscriptDatabase;
+use savant_db::{
+    TranscriptDatabase, 
+    LLMClientFactory, LLMConfig,
+    QueryProcessor, ConversationContextManager, QueryOptimizer,
+    QuerySecurityManager
+};
+use savant_db::natural_query::LLMClientWrapper;
 
 /// MCP JSON-RPC 2.0 request
 #[derive(Debug, Deserialize)]

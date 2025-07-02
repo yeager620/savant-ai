@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio;
 
-use savant_db::{TranscriptDatabase, MCPServer, LLMConfig, StdioTransport};
+use savant_mcp::{TranscriptDatabase, MCPServer, LLMConfig, StdioTransport};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -122,7 +122,7 @@ async fn run_test_mode(server: &MCPServer) -> Result<()> {
     
     // Test 1: Initialize
     eprintln!("Test 1: Initialize");
-    let init_request = savant_db::MCPRequest {
+    let init_request = savant_mcp::MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(serde_json::json!(1)),
         method: "initialize".to_string(),
@@ -142,7 +142,7 @@ async fn run_test_mode(server: &MCPServer) -> Result<()> {
     
     // Test 2: List tools
     eprintln!("Test 2: List tools");
-    let tools_request = savant_db::MCPRequest {
+    let tools_request = savant_mcp::MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(serde_json::json!(2)),
         method: "tools/list".to_string(),
@@ -155,7 +155,7 @@ async fn run_test_mode(server: &MCPServer) -> Result<()> {
     
     // Test 3: Query conversations
     eprintln!("Test 3: Query conversations");
-    let query_request = savant_db::MCPRequest {
+    let query_request = savant_mcp::MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(serde_json::json!(3)),
         method: "tools/call".to_string(),
@@ -174,7 +174,7 @@ async fn run_test_mode(server: &MCPServer) -> Result<()> {
     
     // Test 4: Get database stats
     eprintln!("Test 4: Get database stats");
-    let stats_request = savant_db::MCPRequest {
+    let stats_request = savant_mcp::MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(serde_json::json!(4)),
         method: "tools/call".to_string(),
@@ -192,7 +192,7 @@ async fn run_test_mode(server: &MCPServer) -> Result<()> {
     
     // Test 5: List resources
     eprintln!("Test 5: List resources");
-    let resources_request = savant_db::MCPRequest {
+    let resources_request = savant_mcp::MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(serde_json::json!(5)),
         method: "resources/list".to_string(),
