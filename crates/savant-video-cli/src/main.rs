@@ -284,6 +284,10 @@ async fn start_capture(
                         window_title: app_info.and_then(|a| a.window_title),
                         change_detected: true, // TODO: Implement change detection
                         ocr_text: None,        // TODO: Implement OCR
+                        enhanced_analysis: None,
+                        detected_applications: Vec::new(),
+                        activity_classification: None,
+                        visual_context: None,
                     },
                 };
 

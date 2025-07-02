@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience wrapper for system permissions verification
+exec "$(dirname "$0")/scripts/setup/verify-system-permissions.sh" "$@"

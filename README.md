@@ -26,14 +26,20 @@ ollama pull devstral && ollama serve
 # Clone and setup
 git clone <repo> && cd savant-ai
 
-# Start all multimodal systems
-./start-daemons                   # Audio + Video + AI analysis
+# Automated setup (installs everything possible)
+./setup                          # Automated dependency installation + guided permission setup
+
+# Or verify existing configuration
+./verify-permissions             # Check all macOS permissions & settings
+
+# Start all multimodal systems  
+./start-daemons                  # Audio + Video + AI analysis
 
 # Monitor system status
-./monitor-daemons                 # Real-time dashboard
+./monitor-daemons                # Real-time dashboard
 
 # Test everything is working
-./test-systems                    # Comprehensive test suite
+./test-systems                   # Comprehensive test suite
 
 # Run main application
 cargo tauri dev
@@ -43,13 +49,19 @@ cargo tauri dev
 
 ### **One-Command Operations**
 ```bash
-# Convenience commands (recommended)
+# System setup & verification
+./setup                         # Automated setup (everything possible via CLI)
+./verify-permissions            # Check macOS permissions & settings
+
+# Daemon management (recommended)
 ./start-daemons                 # Start audio + video + multimodal analysis
 ./stop-daemons                  # Stop all daemons gracefully
 ./monitor-daemons               # Real-time monitoring dashboard  
 ./test-systems                  # Test all components
 
-# Full script paths
+# Full script paths  
+./scripts/setup/automated-setup.sh
+./scripts/setup/verify-system-permissions.sh
 ./scripts/daemon-management/start_all_daemons.sh
 ./scripts/daemon-management/stop_all_daemons.sh
 ./scripts/daemon-management/restart_daemons.sh
@@ -293,13 +305,51 @@ scripts/
 start-daemons, stop-daemons, monitor-daemons, test-systems
 ```
 
-## Platform Requirements
+## Platform Requirements & Setup
 
-- **macOS**: Screen Recording + Accessibility API + microphone permissions
+### **System Permissions (macOS)**
+
+#### **Automated Setup**
+```bash
+./setup  # Installs dependencies + guides through permissions
+```
+
+**What's Automated:**
+- ✅ Homebrew installation
+- ✅ Package installation (ollama, tesseract, imagemagick)  
+- ✅ Rust installation (if needed)
+- ✅ Ollama server startup + model download
+- ✅ Project compilation
+- ✅ Directory creation
+
+#### **Manual Permissions Required**
+⚠️ **macOS prevents CLI automation of privacy permissions for security**
+
+Required permissions (must be granted manually):
+- ❌ **Screen Recording**: Required for video capture and OCR
+- ❌ **Microphone Access**: Required for audio transcription  
+- ⚠️ **Accessibility**: Optional, for advanced UI detection
+
+**The `./setup` script will:**
+1. **Auto-install dependencies**: Homebrew, Ollama, Tesseract, ImageMagick, Rust
+2. **Configure services**: Start Ollama server, download devstral model  
+3. **Build project**: Compile all Rust components
+4. **Create directories**: Set up config and data folders
+5. **Open System Preferences**: Direct to privacy settings
+6. **Guide permissions**: Step-by-step for Screen Recording + Microphone
+7. **Verify setup**: Run tests and start systems automatically
+
+### **Dependencies**
 - **Tesseract OCR**: Text extraction engine (`brew install tesseract`)
-- **Ollama**: Local LLM runtime (`ollama serve`)
+- **Ollama**: Local LLM runtime (`brew install ollama && ollama pull devstral`)
 - **ImageMagick**: Optional, for better image resizing (`brew install imagemagick`)
-- **Dependencies**: Built into Cargo workspace
+- **Rust/Cargo**: Built into workspace dependencies
+
+### **Optional Audio Setup**
+- **BlackHole**: For system audio capture ([Download](https://github.com/ExistentialAudio/BlackHole))
+- **Multi-Output Device**: Configure in Audio MIDI Setup for advanced audio routing
+
+**Detailed Guide**: `docs/user-guides/PERMISSIONS_SETUP.md`
 
 ## Performance Optimization
 
@@ -316,6 +366,42 @@ sips -Z 1400 screenshot.png --out screenshot_small.png
 
 # Or with ImageMagick for better quality
 convert screenshot.png -resize 1400x screenshot_small.png
+```
+
+## Troubleshooting & Advanced Setup
+
+### **Permission Issues**
+```bash
+# Advanced permission troubleshooting
+./scripts/setup/permission-helper.sh
+
+# Reset permissions (requires admin password)
+sudo tccutil reset ScreenCapture /Applications/Terminal.app
+sudo tccutil reset Microphone /Applications/Terminal.app
+
+# Try different terminal (if current one has issues)
+brew install --cask iterm2  # Alternative terminal
+```
+
+### **Automation Limitations**
+- ❌ **macOS prevents CLI automation of privacy permissions** (by design)
+- ✅ **Everything else is automated**: dependencies, services, compilation
+- 🔧 **Workarounds available**: Permission reset, alternative terminals, guided setup
+
+### **Common Fixes**
+```bash
+# If setup fails
+./verify-permissions        # Identify specific issues
+./setup                     # Re-run automated setup
+
+# If permissions aren't working
+# 1. Restart terminal after granting permissions
+# 2. Check System Preferences → Privacy settings
+# 3. Try: ./scripts/setup/permission-helper.sh
+
+# If Ollama issues
+ollama serve               # Ensure server is running
+ollama list                # Check available models
 ```
 
 ## UNIX Philosophy

@@ -6,6 +6,14 @@ This directory contains all utility scripts organized by functionality.
 
 ```
 scripts/
+├── setup/                     # Automated setup and installation
+│   ├── automated-setup.sh     # Complete automated setup + guided permissions
+│   ├── verify-system-permissions.sh # Comprehensive system verification
+│   ├── permission-helper.sh   # Advanced permission troubleshooting
+│   ├── auto-setup-system-audio.sh
+│   ├── fixed-audio-daemon.sh
+│   ├── package-distribution.sh
+│   └── setup-system-audio.sh
 ├── daemon-management/          # Integrated daemon management
 │   ├── start_all_daemons.sh   # Start all systems
 │   ├── stop_all_daemons.sh    # Stop all systems
@@ -25,11 +33,6 @@ scripts/
 │   ├── test-chatbot-integration.sh
 │   ├── test-database-sql.sh
 │   └── test-mcp-natural-queries.sh
-├── setup/                     # Setup and installation
-│   ├── auto-setup-system-audio.sh
-│   ├── fixed-audio-daemon.sh
-│   ├── package-distribution.sh
-│   └── setup-system-audio.sh
 └── utils/                     # Utility scripts
     └── update-paths.sh
 ```
@@ -39,6 +42,11 @@ scripts/
 From the project root, use convenience commands:
 
 ```bash
+# Setup & Verification
+./setup             # Automated setup (dependencies + guided permissions)
+./verify-permissions # Check system configuration
+
+# Daemon Management  
 ./start-daemons     # Start all daemons
 ./stop-daemons      # Stop all daemons  
 ./monitor-daemons   # Monitor systems
@@ -48,6 +56,11 @@ From the project root, use convenience commands:
 ## Direct Script Access
 
 ```bash
+# Setup & Installation
+./scripts/setup/automated-setup.sh
+./scripts/setup/verify-system-permissions.sh
+./scripts/setup/permission-helper.sh
+
 # Daemon management
 ./scripts/daemon-management/start_all_daemons.sh
 ./scripts/daemon-management/monitor_daemons.sh
@@ -64,6 +77,14 @@ From the project root, use convenience commands:
 
 ## Script Categories
 
+### **Setup & Installation** (`setup/`)
+Automated installation, system verification, and permission management.
+
+**Key Scripts:**
+- `automated-setup.sh` - Complete automated setup with guided permissions
+- `verify-system-permissions.sh` - Comprehensive system verification
+- `permission-helper.sh` - Advanced permission troubleshooting and reset
+
 ### **Daemon Management** (`daemon-management/`)
 Complete system lifecycle management with dependency checking, status monitoring, and integrated testing.
 
@@ -75,9 +96,6 @@ Screen capture and video analysis daemon management.
 
 ### **Tests** (`tests/`)
 Integration tests for MCP, database, and multimodal functionality.
-
-### **Setup** (`setup/`)
-Installation and configuration scripts for system dependencies.
 
 ### **Utils** (`utils/`)
 General utility scripts for maintenance and development.
