@@ -6,27 +6,27 @@ echo "============================================="
 
 echo ""
 echo "📊 What's in your database:"
-./target/release/savant-db --db-path ~/.config/savant-ai/personal-audio.db list
+./target/release/savant-db --db-path data/databases/dev/personal-audio.db list
 
 echo ""
 echo "🔍 Searching for 'machine learning' content:"
-./target/release/savant-db --db-path ~/.config/savant-ai/personal-audio.db query --text "machine learning"
+./target/release/savant-db --db-path data/databases/dev/personal-audio.db query --text "machine learning"
 
 echo ""
 echo "🔍 Searching for 'PyTorch' content:"
-./target/release/savant-db --db-path ~/.config/savant-ai/personal-audio.db query --text "PyTorch"
+./target/release/savant-db --db-path data/databases/dev/personal-audio.db query --text "PyTorch"
 
 echo ""
 echo "🔍 Searching for 'Unsloth' content:"
-./target/release/savant-db --db-path ~/.config/savant-ai/personal-audio.db query --text "Unsloth"
+./target/release/savant-db --db-path data/databases/dev/personal-audio.db query --text "Unsloth"
 
 echo ""
 echo "📋 Database statistics:"
-./target/release/savant-db --db-path ~/.config/savant-ai/personal-audio.db stats
+./target/release/savant-db --db-path data/databases/dev/personal-audio.db stats
 
 echo ""
 echo "🤖 Testing AI query (this may take a moment)..."
-RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_conversations","arguments":{"query":"What topics about machine learning were discussed?","session_id":"demo"}}}' | timeout 20s ./target/release/savant-mcp-server --database ~/.config/savant-ai/personal-audio.db --llm-provider ollama --llm-model devstral 2>/dev/null | head -1)
+RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_conversations","arguments":{"query":"What topics about machine learning were discussed?","session_id":"demo"}}}' | timeout 20s ./target/release/savant-mcp-server --database data/databases/dev/personal-audio.db --llm-provider ollama --llm-model devstral 2>/dev/null | head -1)
 
 if [ -n "$RESPONSE" ]; then
     echo "✅ AI Response received:"

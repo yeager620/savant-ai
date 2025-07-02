@@ -17,7 +17,7 @@ echo -e "${CYAN}===================================${NC}"
 
 # Configuration
 AUDIO_DATA_DIR="/Users/yeager/Documents/savant-ai/data/audio-captures"
-DB_PATH="$HOME/.config/savant-ai/personal-transcripts.db"
+DB_PATH="./data/databases/dev/personal-transcripts.db"
 DB_CLI="./target/release/savant-db"
 MCP_SERVER="./target/release/savant-mcp-server"
 

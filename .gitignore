@@ -10,4 +10,12 @@ CLAUDE.md
 
 models/ggml-base.en.bin
 
-/data/
+# Data directories
+/data/audio-captures/
+/data/daemon-logs/
+/data/databases/dev/
+/data/databases/tmp/
+
+# Keep test databases and fixtures for reproducible testing
+!/data/databases/test/
+!/data/databases/fixtures/

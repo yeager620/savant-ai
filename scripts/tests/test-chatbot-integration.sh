@@ -53,7 +53,7 @@ echo -e "${GREEN}✅ Binaries built successfully${NC}"
 # Create test database with realistic content
 echo -e "\n${BLUE}Step 1: Populating test database with realistic audio data...${NC}"
 
-TEST_DB_PATH="./test-chatbot-integration.db"
+TEST_DB_PATH="./data/databases/test/chatbot-integration.db"
 rm -f "$TEST_DB_PATH"
 
 # Create sample transcription data that simulates realistic conversations

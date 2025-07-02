@@ -28,7 +28,7 @@ fi
 echo -e "${GREEN}✅ Tools ready${NC}"
 
 # Configuration
-DB_PATH="$HOME/.config/savant-ai/personal-audio.db"
+DB_PATH="./data/databases/dev/personal-audio.db"
 AUDIO_DIR="/Users/yeager/Documents/savant-ai/data/audio-captures"
 
 # Create a sample database with your actual audio content
