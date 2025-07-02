@@ -269,11 +269,11 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                             database_stats.get().map(|stats| {
                                 view! {
                                     <DatabaseStatsDisplay stats=stats />
-                                }
+                                }.into_any()
                             }).unwrap_or_else(|| {
                                 view! {
-                                    <div class="loading">"Loading statistics..."</div>
-                                }.into_any()
+                                     <div class="loading">"Loading statistics..."</div>
+                                 }
                             })
                         }}
                     </div>
@@ -310,7 +310,7 @@ fn QueryResultsDisplay(
                             }
                         }).collect::<Vec<_>>()
                     } else {
-                        vec![view! { <p>"No conversations found"</p> }]
+                        vec![view! { <div class="conversation-item"><p>"No conversations found"</p></div> }]
                     }
                 }
                 "analyze_speaker" => {
@@ -342,7 +342,7 @@ fn QueryResultsDisplay(
                             }
                         }).collect::<Vec<_>>()
                     } else {
-                        vec![view! { <p>"No speaker data found"</p> }]
+                        vec![view! { <div class="speaker-stats"><p>"No speaker data found"</p></div> }]
                     }
                 }
                 _ => {

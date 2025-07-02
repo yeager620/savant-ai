@@ -169,14 +169,8 @@ pub fn TaskbarApp() -> impl IntoView {
         <div class="taskbar-app">
             <Show when=move || app_mode.get() == AppMode::Chat>
                 <MinimalChat 
-                    on_browser_mode={
-                        let set_app_mode = set_app_mode.clone();
-                        Some(std::sync::Arc::new(move || set_app_mode.set(AppMode::Browser)))
-                    }
-                    on_database_mode={
-                        let set_app_mode = set_app_mode.clone();
-                        Some(std::sync::Arc::new(move || set_app_mode.set(AppMode::Database)))
-                    }
+                    on_browser_mode={std::sync::Arc::new(move || set_app_mode.set(AppMode::Browser))}
+                    on_database_mode={std::sync::Arc::new(move || set_app_mode.set(AppMode::Database))}
                 />
             </Show>
             
