@@ -60,11 +60,11 @@ async fn execute_natural_query(query: String) -> Result<QueryResponse, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "query": query
     })).map_err(|e| e.to_string())?;
-    
+
     let result = invoke("natural_language_query", args).await;
     let response: QueryResponse = serde_wasm_bindgen::from_value(result)
         .map_err(|e| format!("Failed to parse response: {}", e))?;
-    
+
     Ok(response)
 }
 
@@ -73,7 +73,7 @@ async fn get_database_stats() -> Result<DatabaseStats, String> {
     let result = invoke("get_database_stats", JsValue::NULL).await;
     let stats: DatabaseStats = serde_wasm_bindgen::from_value(result)
         .map_err(|e| format!("Failed to parse stats: {}", e))?;
-    
+
     Ok(stats)
 }
 
@@ -83,15 +83,15 @@ async fn search_conversations(query: String, limit: Option<usize>) -> Result<Vec
         "query": query,
         "limit": limit
     })).map_err(|e| e.to_string())?;
-    
+
     let result = invoke("search_conversations", args).await;
     let response: serde_json::Value = serde_wasm_bindgen::from_value(result)
         .map_err(|e| format!("Failed to parse response: {}", e))?;
-    
+
     let results: Vec<SearchResult> = serde_json::from_value(
         response.get("results").unwrap_or(&serde_json::Value::Array(vec![])).clone()
     ).map_err(|e| format!("Failed to parse results: {}", e))?;
-    
+
     Ok(results)
 }
 
@@ -104,7 +104,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
     let (active_tab, set_active_tab) = signal("query");
     let (database_stats, set_database_stats) = signal(None::<DatabaseStats>);
     let (search_results, set_search_results) = signal(Vec::<SearchResult>::new());
-    
+
     // Load database stats on mount
     let _effect = Effect::new(move |_| {
         spawn_local(async move {
@@ -114,15 +114,15 @@ pub fn NaturalQueryInterface() -> impl IntoView {
             }
         });
     });
-    
+
     let execute_query = move || {
         let current_query = query.get();
         if current_query.trim().is_empty() {
             return;
         }
-        
+
         set_loading.set(true);
-        
+
         spawn_local(async move {
             match execute_natural_query(current_query).await {
                 Ok(result) => {
@@ -145,12 +145,12 @@ pub fn NaturalQueryInterface() -> impl IntoView {
             }
         });
     };
-    
+
     let perform_search = move |search_query: String| {
         if search_query.trim().is_empty() {
             return;
         }
-        
+
         spawn_local(async move {
             match search_conversations(search_query, Some(20)).await {
                 Ok(results) => set_search_results.set(results),
@@ -158,7 +158,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
             }
         });
     };
-    
+
     view! {
         <div class="natural-query-interface">
             <div class="tabs">
@@ -181,7 +181,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                     "Database Statistics"
                 </button>
             </div>
-            
+
             <div class="tab-content">
                 // Natural Language Query Tab
                 <div class="tab-panel" class:active=move || active_tab.get() == "query">
@@ -197,7 +197,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                                 <li>"Who are the most active speakers?"</li>
                             </ul>
                         </div>
-                        
+
                         <div class="query-input">
                             <textarea
                                 placeholder="Ask anything about your conversations..."
@@ -219,7 +219,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                                 {move || if loading.get() { "Thinking..." } else { "Ask" }}
                             </button>
                         </div>
-                        
+
                         {move || {
                             response.get().map(|resp| {
                                 view! {
@@ -232,7 +232,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                                                 <span class="count">"Results: " {resp.result_count}</span>
                                             </div>
                                         </div>
-                                        
+
                                         {if resp.success {
                                             view! {
                                                 <div class="results-content">
@@ -252,7 +252,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                         }}
                     </div>
                 </div>
-                
+
                 // Search Tab
                 <div class="tab-panel" class:active=move || active_tab.get() == "search">
                     <div class="search-section">
@@ -260,7 +260,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                         <SearchInterface on_search=perform_search results=search_results />
                     </div>
                 </div>
-                
+
                 // Statistics Tab
                 <div class="tab-panel" class:active=move || active_tab.get() == "stats">
                     <div class="stats-section">
@@ -273,7 +273,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                             }).unwrap_or_else(|| {
                                 view! {
                                      <div class="loading">"Loading statistics..."</div>
-                                 }
+                                 }.into_any()
                             })
                         }}
                     </div>
@@ -291,68 +291,101 @@ fn QueryResultsDisplay(
 ) -> impl IntoView {
     view! {
         <div class="query-results-display">
-            {match intent_type.as_str() {
-                "find_conversations" => {
-                    if let Some(array) = results.as_array() {
-                        array.iter().map(|item| {
-                            let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled");
-                            let participants = item.get("participants").and_then(|p| p.as_array())
-                                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
-                                .unwrap_or_else(|| "Unknown".to_string());
-                            let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
-                            
-                            view! {
-                                <div class="conversation-item">
-                                    <h5>{title}</h5>
-                                    <p>"Participants: " {participants}</p>
-                                    <p>"Duration: " {format!("{:.1} minutes", duration / 60.0)}</p>
-                                </div>
+            {
+                // Process the data outside of the view to avoid lifetime issues
+                let content = match intent_type.as_str() {
+                    "find_conversations" => {
+                        // Extract conversation data
+                        let mut conversations = Vec::new();
+
+                        if let Some(array) = results.as_array() {
+                            for item in array {
+                                let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled").to_string();
+                                let participants = item.get("participants").and_then(|p| p.as_array())
+                                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                                    .unwrap_or_else(|| "Unknown".to_string());
+                                let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
+                                conversations.push((title, participants, duration));
                             }
-                        }).collect::<Vec<_>>()
-                    } else {
-                        vec![view! { <div class="conversation-item"><p>"No conversations found"</p></div> }]
+                        }
+
+                        // If no conversations found, add a dummy one
+                        if conversations.is_empty() {
+                            conversations.push(("No Results".to_string(), "None".to_string(), 0.0));
+                        }
+
+                        // Create the view with the processed data
+                        view! {
+                            <div class="conversations-list">
+                                {conversations.into_iter().map(|(title, participants, duration)| {
+                                    view! {
+                                        <div class="conversation-item">
+                                            <h5>{title}</h5>
+                                            <p>"Participants: " {participants}</p>
+                                            <p>"Duration: " {format!("{:.1} minutes", duration / 60.0)}</p>
+                                        </div>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        }.into_any()
                     }
-                }
-                "analyze_speaker" => {
-                    if let Some(array) = results.as_array() {
-                        array.iter().map(|item| {
-                            let speaker = item.get("speaker").and_then(|s| s.as_str()).unwrap_or("Unknown");
-                            let conv_count = item.get("conversation_count").and_then(|c| c.as_i64()).unwrap_or(0);
-                            let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
-                            let confidence = item.get("avg_confidence").and_then(|c| c.as_f64()).unwrap_or(0.0);
-                            
-                            view! {
-                                <div class="speaker-stats">
-                                    <h5>{speaker}</h5>
-                                    <div class="stats-grid">
-                                        <div class="stat">
-                                            <label>"Conversations:"</label>
-                                            <span>{conv_count}</span>
-                                        </div>
-                                        <div class="stat">
-                                            <label>"Total Time:"</label>
-                                            <span>{format!("{:.1} hours", duration / 3600.0)}</span>
-                                        </div>
-                                        <div class="stat">
-                                            <label>"Avg Confidence:"</label>
-                                            <span>{format!("{:.1}%", confidence * 100.0)}</span>
-                                        </div>
-                                    </div>
-                                </div>
+                    "analyze_speaker" => {
+                        // Extract speaker data
+                        let mut speakers = Vec::new();
+
+                        if let Some(array) = results.as_array() {
+                            for item in array {
+                                let speaker = item.get("speaker").and_then(|s| s.as_str()).unwrap_or("Unknown").to_string();
+                                let conv_count = item.get("conversation_count").and_then(|c| c.as_i64()).unwrap_or(0);
+                                let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
+                                let confidence = item.get("avg_confidence").and_then(|c| c.as_f64()).unwrap_or(0.0);
+                                speakers.push((speaker, conv_count, duration, confidence));
                             }
-                        }).collect::<Vec<_>>()
-                    } else {
-                        vec![view! { <div class="speaker-stats"><p>"No speaker data found"</p></div> }]
+                        }
+
+                        // If no speakers found, add a dummy one
+                        if speakers.is_empty() {
+                            speakers.push(("No Data".to_string(), 0, 0.0, 0.0));
+                        }
+
+                        // Create the view with the processed data
+                        view! {
+                            <div class="speakers-list">
+                                {speakers.into_iter().map(|(speaker, conv_count, duration, confidence)| {
+                                    view! {
+                                        <div class="speaker-stats">
+                                            <h5>{speaker}</h5>
+                                            <div class="stats-grid">
+                                                <div class="stat">
+                                                    <label>"Conversations:"</label>
+                                                    <span>{conv_count}</span>
+                                                </div>
+                                                <div class="stat">
+                                                    <label>"Total Time:"</label>
+                                                    <span>{format!("{:.1} hours", duration / 3600.0)}</span>
+                                                </div>
+                                                <div class="stat">
+                                                    <label>"Avg Confidence:"</label>
+                                                    <span>{format!("{:.1}%", confidence * 100.0)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        }.into_any()
                     }
-                }
-                _ => {
-                    vec![view! {
-                        <div class="generic-results">
-                            <pre>{serde_json::to_string_pretty(&results).unwrap_or_else(|_| "Invalid JSON".to_string())}</pre>
-                        </div>
-                    }]
-                }
-            }}
+                    _ => {
+                        view! {
+                            <div class="generic-results">
+                                <pre>{serde_json::to_string_pretty(&results).unwrap_or_else(|_| "Invalid JSON".to_string())}</pre>
+                            </div>
+                        }.into_any()
+                    }
+                };
+
+                content
+            }
         </div>
     }
 }
@@ -367,7 +400,7 @@ where
     F: Fn(String) + 'static + Clone,
 {
     let (search_query, set_search_query) = signal(String::new());
-    
+
     let perform_search = {
         let on_search = on_search.clone();
         let search_query = search_query.clone();
@@ -378,7 +411,7 @@ where
             }
         }
     };
-    
+
     view! {
         <div class="search-interface">
             <div class="search-input">
@@ -401,7 +434,7 @@ where
                     move |_| perform_search()
                 }>"Search"</button>
             </div>
-            
+
             <div class="search-results">
                 {move || {
                     let results_vec = results.get();
@@ -466,7 +499,7 @@ fn DatabaseStatsDisplay(stats: DatabaseStats) -> impl IntoView {
                     <div class="stat-value">{format!("{:.1}h", stats.total_duration_hours)}</div>
                 </div>
             </div>
-            
+
             <div class="top-speakers">
                 <h4>"Most Active Speakers"</h4>
                 <div class="speakers-list">

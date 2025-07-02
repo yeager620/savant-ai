@@ -19,3 +19,4 @@ models/ggml-base.en.bin
 # Keep test databases and fixtures for reproducible testing
 !/data/databases/test/
 !/data/databases/fixtures/
+/.claude/

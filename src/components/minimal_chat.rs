@@ -56,7 +56,7 @@ pub fn MinimalChat(
         response_tokens: 0,
     });
     let (context_warning, set_context_warning) = signal(Option::<String>::None);
-    
+
     // Load chat history on component mount
     let set_messages_clone = set_messages.clone();
     spawn_local(async move {
@@ -70,7 +70,7 @@ pub fn MinimalChat(
             }
         }
     });
-    
+
     // Setup streaming event listener once on component mount
     let set_streaming_content_listener = set_streaming_content.clone();
     let set_is_streaming_listener = set_is_streaming.clone();
@@ -78,7 +78,7 @@ pub fn MinimalChat(
     let set_context_usage_listener = set_context_usage.clone();
     let set_context_warning_listener = set_context_warning.clone();
     let set_input_text_listener = set_input_text.clone();
-    
+
     spawn_local(async move {
         setup_streaming_listener(
             set_streaming_content_listener,
@@ -87,7 +87,7 @@ pub fn MinimalChat(
             set_context_usage_listener,
             set_context_warning_listener,
         ).await;
-        
+
         setup_prompt_selection_listener(set_input_text_listener).await;
     });
 
@@ -99,7 +99,7 @@ pub fn MinimalChat(
         let set_is_streaming = set_is_streaming.clone();
         let set_streaming_content = set_streaming_content.clone();
         let input_text = input_text.clone();
-        
+
         move || {
             let text = input_text.get().trim().to_string();
             if text.is_empty() || is_streaming.get() {
@@ -112,10 +112,10 @@ pub fn MinimalChat(
                 is_user: true,
                 timestamp: get_current_time(),
             };
-            
+
             // Clone user message for history before it's moved
             let _user_message_for_history = user_message.clone();
-            
+
             set_messages.update(|msgs| {
                 msgs.push(user_message);
                 // Save chat history after adding user message
@@ -132,7 +132,7 @@ pub fn MinimalChat(
 
             // Get the current messages (which already includes the user message we just added)
             let all_messages = messages.get();
-            
+
             spawn_local(async move {
                 // Start streaming request
                 match send_to_ollama_streaming(text, all_messages).await {
@@ -196,22 +196,11 @@ pub fn MinimalChat(
                     {on_database_mode.map(|handler| {
                         view! {
                             <button 
-                                class="browser-toggle database-toggle"
+                                class="database-toggle"
                                 title="Open Database Query Interface"
                                 on:click=move |_| handler()
                             >
                                 "DB"
-                            </button>
-                        }
-                    })}
-                    {on_browser_mode.map(|handler| {
-                        view! {
-                            <button 
-                                class="browser-toggle"
-                                title="Open Browser Assistant"
-                                on:click=move |_| handler()
-                            >
-                                "browser"
                             </button>
                         }
                     })}
@@ -256,7 +245,7 @@ pub fn MinimalChat(
                     </div>
                 </div>
             </div>
-            
+
             <Show when=move || context_warning.get().is_some()>
                 <div class="context-warning">
                     <span class="warning-text">
@@ -264,7 +253,7 @@ pub fn MinimalChat(
                     </span>
                 </div>
             </Show>
-            
+
             <div class="chat-messages">
                 <For
                     each=move || messages.get()
@@ -281,16 +270,16 @@ pub fn MinimalChat(
                         }
                     }
                 />
-                
+
                 <Show when=move || is_streaming.get()>
                     <div class="message ai streaming">
                         <div class="message-content" inner_html=move || render_markdown(&streaming_content.get())>
                         </div>
                     </div>
                 </Show>
-                
+
             </div>
-            
+
             <div class="chat-input">
                 <textarea
                     placeholder="Ask a question..."
@@ -322,7 +311,7 @@ async fn load_chat_history() -> Result<Vec<ChatMessage>, String> {
 async fn save_chat_history(messages: &[ChatMessage]) -> Result<(), String> {
     let args_value = serde_wasm_bindgen::to_value(messages)
         .map_err(|e| format!("Serialization error: {}", e))?;
-    
+
     let result = invoke("save_chat_history", args_value).await;
     serde_wasm_bindgen::from_value::<()>(result)
         .map_err(|e| format!("Failed to save chat history: {}", e))
@@ -340,15 +329,15 @@ async fn send_to_ollama_streaming(prompt: String, messages: Vec<ChatMessage>) ->
         prompt,
         messages,
     };
-    
+
     let args_value = serde_wasm_bindgen::to_value(&args)
         .map_err(|e| format!("Serialization error: {}", e))?;
-    
+
     // Use the new chat API instead of the old generate API
     let result = invoke("query_ollama_chat_streaming", args_value).await;
     serde_wasm_bindgen::from_value::<()>(result)
         .map_err(|e| format!("Streaming error: {}", e))?;
-    
+
     Ok(())
 }
 
@@ -364,7 +353,7 @@ async fn setup_streaming_listener(
         #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
         async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
     }
-    
+
     let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
         if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
             if let Some(payload) = event_data.get("payload") {
@@ -398,10 +387,10 @@ async fn setup_streaming_listener(
             }
         }
     }) as Box<dyn FnMut(_)>);
-    
+
     let _ = listen("ollama_stream", handler.as_ref().unchecked_ref()).await;
     handler.forget();
-    
+
     // Setup context usage listener
     let context_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
         if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
@@ -412,10 +401,10 @@ async fn setup_streaming_listener(
             }
         }
     }) as Box<dyn FnMut(_)>);
-    
+
     let _ = listen("context_usage", context_handler.as_ref().unchecked_ref()).await;
     context_handler.forget();
-    
+
     // Setup context truncation warning listener
     let warning_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
         if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
@@ -432,7 +421,7 @@ async fn setup_streaming_listener(
             }
         }
     }) as Box<dyn FnMut(_)>);
-    
+
     let _ = listen("context_truncated", warning_handler.as_ref().unchecked_ref()).await;
     warning_handler.forget();
 }
@@ -450,7 +439,7 @@ async fn setup_prompt_selection_listener(set_input_text: WriteSignal<String>) {
         #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
         async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
     }
-    
+
     let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
         if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
             if let Some(payload) = event_data.get("payload") {
@@ -461,8 +450,7 @@ async fn setup_prompt_selection_listener(set_input_text: WriteSignal<String>) {
             }
         }
     }) as Box<dyn FnMut(_)>);
-    
+
     let _ = listen("prompt_selected", handler.as_ref().unchecked_ref()).await;
     handler.forget();
 }
-

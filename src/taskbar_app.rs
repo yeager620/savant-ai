@@ -53,7 +53,7 @@ enum AppMode {
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-    
+
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
     async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
 }
@@ -69,18 +69,18 @@ pub fn TaskbarApp() -> impl IntoView {
     });
     let (selected_index, set_selected_index) = signal(0usize);
     let (is_monitoring, set_is_monitoring) = signal(false);
-    
+
     // Setup browser event listeners
     spawn_local(async move {
         setup_browser_event_listeners(set_browser_state).await;
     });
-    
+
     // Handle keyboard navigation for browser mode
     let handle_keydown = move |ev: web_sys::KeyboardEvent| {
         if app_mode.get() != AppMode::Browser {
             return;
         }
-        
+
         let prompts = browser_state.get().top_prompts;
         if prompts.is_empty() {
             return;
@@ -116,39 +116,40 @@ pub fn TaskbarApp() -> impl IntoView {
             _ => {}
         }
     };
-    
+
     // Add global keydown event listener
     spawn_local(async move {
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
-        
+
         let closure = wasm_bindgen::closure::Closure::wrap(Box::new(handle_keydown) as Box<dyn FnMut(_)>);
         document
             .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
             .unwrap();
         closure.forget();
     });
-    
+
     // Listen for browser toggle events
     let toggle_mode = set_app_mode.clone();
     let get_mode = app_mode.clone();
     spawn_local(async move {
         let window = web_sys::window().unwrap();
-        
+
         let toggle_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::Event| {
             let current_mode = get_mode.get_untracked();
             match current_mode {
                 AppMode::Chat => toggle_mode.set(AppMode::Browser),
                 AppMode::Browser => toggle_mode.set(AppMode::Chat),
+                AppMode::Database => toggle_mode.set(AppMode::Chat),
             }
         }) as Box<dyn FnMut(_)>);
-        
+
         window
             .add_event_listener_with_callback("toggle_browser_mode", toggle_handler.as_ref().unchecked_ref())
             .unwrap();
         toggle_handler.forget();
     });
-    
+
     // Auto-start monitoring when switching to browser mode
     let _effect = Effect::new(move |_| {
         let mode = app_mode.get();
@@ -169,11 +170,10 @@ pub fn TaskbarApp() -> impl IntoView {
         <div class="taskbar-app">
             <Show when=move || app_mode.get() == AppMode::Chat>
                 <MinimalChat 
-                    on_browser_mode={std::sync::Arc::new(move || set_app_mode.set(AppMode::Browser))}
                     on_database_mode={std::sync::Arc::new(move || set_app_mode.set(AppMode::Database))}
                 />
             </Show>
-            
+
             <Show when=move || app_mode.get() == AppMode::Database>
                 <div class="database-mode">
                     <div class="database-header">
@@ -192,7 +192,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     </div>
                 </div>
             </Show>
-            
+
             <Show when=move || app_mode.get() == AppMode::Browser>
                 <div class="browser-mode">
                     <div class="browser-header">
@@ -201,7 +201,7 @@ pub fn TaskbarApp() -> impl IntoView {
                             {move || if browser_state.get().is_connected { "🟢" } else { "🔴" }}
                         </div>
                     </div>
-                    
+
                     <Show when=move || !browser_state.get().top_prompts.is_empty()>
                         <div class="prompt-list">
                             <For
@@ -210,7 +210,7 @@ pub fn TaskbarApp() -> impl IntoView {
                                 children=move |(index, prompt)| {
                                     let is_selected = move || selected_index.get() == index;
                                     let prompt_clone = prompt.clone();
-                                    
+
                                     view! {
                                         <div 
                                             class="prompt-item"
@@ -245,20 +245,20 @@ pub fn TaskbarApp() -> impl IntoView {
                             />
                         </div>
                     </Show>
-                    
+
                     <Show when=move || browser_state.get().is_connected && browser_state.get().top_prompts.is_empty()>
                         <div class="scanning-message">
                             <div class="spinner"></div>
                             "Scanning for prompts..."
                         </div>
                     </Show>
-                    
+
                     <Show when=move || !browser_state.get().is_connected>
                         <div class="connection-message">
                             "Enable Accessibility permissions:\nSystem Preferences > Security & Privacy > Privacy > Accessibility\n\nAdd Savant AI to the list and check the box."
                         </div>
                     </Show>
-                    
+
                     <div class="browser-controls">
                         <button 
                             class="back-btn"
@@ -269,7 +269,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     </div>
                 </div>
             </Show>
-            
+
             // Taskbar-specific CSS
             <style>
                 "
@@ -313,7 +313,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     margin-bottom: 12px;
                     position: relative;
                 }
-                
+
                 .browser-toggle {
                     position: absolute;
                     top: -2px;
@@ -327,38 +327,38 @@ pub fn TaskbarApp() -> impl IntoView {
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
-                
+
                 .browser-toggle:hover {
                     background: rgba(255, 255, 255, 0.2);
                     color: white;
                 }
-                
+
                 .header-right {
                     display: flex;
                     align-items: center;
                     gap: 12px;
                 }
-                
+
                 .context-usage {
                     display: flex;
                     flex-direction: column;
                     align-items: flex-end;
                     gap: 2px;
                 }
-                
+
                 .context-text {
                     font-size: 10px;
                     color: rgba(255, 255, 255, 0.7);
                     font-weight: 500;
                 }
-                
+
                 .context-breakdown {
                     font-size: 8px;
                     color: rgba(255, 255, 255, 0.5);
                     font-weight: 400;
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
                 }
-                
+
                 .context-bar {
                     width: 60px;
                     height: 3px;
@@ -366,14 +366,14 @@ pub fn TaskbarApp() -> impl IntoView {
                     border-radius: 2px;
                     overflow: hidden;
                 }
-                
+
                 .context-fill {
                     height: 100%;
                     background: linear-gradient(90deg, #10b981 0%, #f59e0b 70%, #ef4444 100%);
                     border-radius: 2px;
                     transition: width 0.3s ease;
                 }
-                
+
                 .context-warning {
                     display: flex;
                     align-items: center;
@@ -385,19 +385,19 @@ pub fn TaskbarApp() -> impl IntoView {
                     border-radius: 6px;
                     animation: slide-in 0.3s ease-out;
                 }
-                
+
                 .warning-icon {
                     color: #f59e0b;
                     font-size: 14px;
                     font-weight: bold;
                 }
-                
+
                 .warning-text {
                     color: rgba(255, 255, 255, 0.9);
                     font-size: 11px;
                     line-height: 1.3;
                 }
-                
+
                 @keyframes slide-in {
                     from {
                         opacity: 0;
@@ -486,7 +486,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     background: rgba(107, 114, 128, 0.15);
                     border: 1px solid rgba(107, 114, 128, 0.3);
                 }
-                
+
                 .message.streaming {
                     background: rgba(16, 185, 129, 0.15);
                     border: 1px solid rgba(16, 185, 129, 0.3);
@@ -499,15 +499,15 @@ pub fn TaskbarApp() -> impl IntoView {
                     line-height: 1.4;
                     color: #ffffff;
                 }
-                
+
                 .message-content p {
                     margin: 0 0 8px 0;
                 }
-                
+
                 .message-content p:last-child {
                     margin-bottom: 0;
                 }
-                
+
                 .message-content code {
                     background: rgba(255, 255, 255, 0.1);
                     padding: 2px 4px;
@@ -515,7 +515,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
                     font-size: 11px;
                 }
-                
+
                 .message-content pre {
                     background: rgba(255, 255, 255, 0.05);
                     padding: 8px;
@@ -523,7 +523,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     overflow-x: auto;
                     margin: 4px 0;
                 }
-                
+
                 .message-content pre code {
                     background: none;
                     padding: 0;
@@ -628,7 +628,7 @@ pub fn TaskbarApp() -> impl IntoView {
                 .chat-input button:active {
                     transform: translateY(0);
                 }
-                
+
                 /* Database Mode Styles */
                 .database-mode {
                     display: flex;
@@ -636,7 +636,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     height: 100%;
                     padding: 12px;
                 }
-                
+
                 .database-header {
                     display: flex;
                     justify-content: space-between;
@@ -645,32 +645,32 @@ pub fn TaskbarApp() -> impl IntoView {
                     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     margin-bottom: 12px;
                 }
-                
+
                 .database-header h3 {
                     font-size: 14px;
                     font-weight: 600;
                     color: #ffffff;
                     margin: 0;
                 }
-                
+
                 .database-content {
                     flex: 1;
                     overflow: hidden;
                 }
-                
+
                 .database-controls {
                     margin-top: auto;
                     padding-top: 12px;
                 }
-                
+
                 .database-toggle {
                     background: rgba(79, 70, 229, 0.8) !important;
                 }
-                
+
                 .database-toggle:hover {
                     background: rgba(79, 70, 229, 1) !important;
                 }
-                
+
                 /* Browser Mode Styles */
                 .browser-mode {
                     display: flex;
@@ -678,7 +678,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     height: 100%;
                     padding: 12px;
                 }
-                
+
                 .browser-header {
                     display: flex;
                     justify-content: space-between;
@@ -687,18 +687,18 @@ pub fn TaskbarApp() -> impl IntoView {
                     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     margin-bottom: 12px;
                 }
-                
+
                 .browser-header h3 {
                     font-size: 14px;
                     font-weight: 600;
                     color: #ffffff;
                     margin: 0;
                 }
-                
+
                 .browser-status {
                     font-size: 12px;
                 }
-                
+
                 .prompt-list {
                     flex: 1;
                     overflow-y: auto;
@@ -707,7 +707,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     gap: 8px;
                     margin-bottom: 12px;
                 }
-                
+
                 .prompt-item {
                     background: rgba(255, 255, 255, 0.05);
                     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -716,18 +716,18 @@ pub fn TaskbarApp() -> impl IntoView {
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
-                
+
                 .prompt-item:hover {
                     background: rgba(255, 255, 255, 0.1);
                     border-color: rgba(0, 255, 65, 0.3);
                 }
-                
+
                 .prompt-item.selected {
                     background: rgba(0, 255, 65, 0.1);
                     border-color: #00ff41;
                     box-shadow: 0 1px 4px rgba(0, 255, 65, 0.2);
                 }
-                
+
                 .prompt-text {
                     font-size: 11px;
                     font-weight: 500;
@@ -735,19 +735,19 @@ pub fn TaskbarApp() -> impl IntoView {
                     line-height: 1.3;
                     color: white;
                 }
-                
+
                 .prompt-meta {
                     display: flex;
                     justify-content: space-between;
                     font-size: 9px;
                     opacity: 0.7;
                 }
-                
+
                 .confidence {
                     color: #4CAF50;
                     font-weight: 500;
                 }
-                
+
                 .window-title {
                     color: #2196F3;
                     max-width: 120px;
@@ -755,7 +755,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
-                
+
                 .scanning-message {
                     display: flex;
                     align-items: center;
@@ -766,7 +766,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     font-size: 11px;
                     opacity: 0.7;
                 }
-                
+
                 .connection-message {
                     padding: 12px;
                     background: rgba(255, 255, 255, 0.05);
@@ -778,7 +778,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     margin-bottom: 12px;
                     opacity: 0.8;
                 }
-                
+
                 .spinner {
                     width: 12px;
                     height: 12px;
@@ -787,16 +787,16 @@ pub fn TaskbarApp() -> impl IntoView {
                     border-radius: 50%;
                     animation: spin 1s linear infinite;
                 }
-                
+
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
                 }
-                
+
                 .browser-controls {
                     margin-top: auto;
                 }
-                
+
                 .back-btn {
                     width: 100%;
                     background: rgba(255, 255, 255, 0.1);
@@ -808,7 +808,7 @@ pub fn TaskbarApp() -> impl IntoView {
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
-                
+
                 .back-btn:hover {
                     background: rgba(255, 255, 255, 0.15);
                 }
@@ -832,7 +832,7 @@ async fn setup_browser_event_listeners(set_browser_state: WriteSignal<BrowserSta
             }
         }
     }) as Box<dyn FnMut(_)>);
-    
+
     let _ = listen("browser_state_updated", state_handler.as_ref().unchecked_ref()).await;
     state_handler.forget();
 }
@@ -853,7 +853,7 @@ async fn select_prompt(prompt_id: String) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "prompt_id": prompt_id
     })).unwrap();
-    
+
     let result = invoke("select_prompt", args).await;
     serde_wasm_bindgen::from_value::<()>(result)
         .map_err(|e| format!("Failed to select prompt: {}", e))
