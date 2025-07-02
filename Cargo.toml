@@ -27,7 +27,9 @@ members = [
     "crates/savant-stt",
     "crates/savant-transcribe",
     "crates/savant-db",
-    "crates/savant-mcp"
+    "crates/savant-mcp",
+    "crates/savant-video",
+    "crates/savant-video-cli"
 ]
 resolver = "2"
 
