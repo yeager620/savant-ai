@@ -1,0 +1,42 @@
+[package]
+name = "savant-vision"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+savant-core = { path = "../savant-core" }
+savant-ocr = { path = "../savant-ocr" }
+anyhow = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+image = "0.25"
+tracing = "0.1"
+uuid = { version = "1.0", features = ["v4"] }
+
+# Computer vision and ML
+imageproc = "0.25"
+ndarray = "0.16"
+
+# Pattern matching and analysis
+regex = "1.0"
+url = "2.0"
+
+# Color analysis
+palette = "0.7"
+
+# Async support
+futures = "0.3"
+async-trait = "0.1"
+
+# Configuration
+toml = "0.8"
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+tracing-subscriber = "0.3"
+
+[[bin]]
+name = "savant-vision"
+path = "src/main.rs"

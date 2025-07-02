@@ -7,11 +7,15 @@ pub mod capture;
 pub mod config;
 pub mod privacy;
 pub mod storage;
+pub mod analyzer;
+pub mod multimodal;
 
 pub use capture::VideoCapture;
 pub use config::{CaptureConfig, ImageQuality, VideoConfig};
 pub use privacy::{PrivacyController, PrivacySettings};
 pub use storage::{StorageManager, StorageSettings};
+pub use analyzer::{EnhancedVideoAnalyzer, VideoAnalysisResult};
+pub use multimodal::{MultimodalFrame, MultimodalAnalyzer};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoFrame {
@@ -32,6 +36,10 @@ pub struct FrameMetadata {
     pub window_title: Option<String>,
     pub change_detected: bool,
     pub ocr_text: Option<String>,
+    pub enhanced_analysis: Option<VideoAnalysisResult>,
+    pub detected_applications: Vec<savant_vision::DetectedApp>,
+    pub activity_classification: Option<savant_vision::ActivityClassification>,
+    pub visual_context: Option<savant_vision::VisualContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
