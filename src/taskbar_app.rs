@@ -171,11 +171,11 @@ pub fn TaskbarApp() -> impl IntoView {
                 <MinimalChat 
                     on_browser_mode={
                         let set_app_mode = set_app_mode.clone();
-                        Some(Box::new(move || set_app_mode.set(AppMode::Browser)) as Box<dyn Fn() + Send + Sync + 'static>)
+                        Some(std::sync::Arc::new(move || set_app_mode.set(AppMode::Browser)))
                     }
                     on_database_mode={
                         let set_app_mode = set_app_mode.clone();
-                        Some(Box::new(move || set_app_mode.set(AppMode::Database)) as Box<dyn Fn() + Send + Sync + 'static>)
+                        Some(std::sync::Arc::new(move || set_app_mode.set(AppMode::Database)))
                     }
                 />
             </Show>

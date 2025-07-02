@@ -238,13 +238,13 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                                                 <div class="results-content">
                                                     <QueryResultsDisplay results=resp.results.clone() intent_type=resp.intent_type.clone() />
                                                 </div>
-                                            }
+                                            }.into_any()
                                         } else {
                                             view! {
                                                 <div class="error-content">
                                                     <p class="error">{resp.error.unwrap_or_else(|| "Unknown error".to_string())}</p>
                                                 </div>
-                                            }
+                                            }.into_any()
                                         }}
                                     </div>
                                 }
@@ -273,7 +273,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                             }).unwrap_or_else(|| {
                                 view! {
                                     <div class="loading">"Loading statistics..."</div>
-                                }
+                                }.into_any()
                             })
                         }}
                     </div>
@@ -368,10 +368,14 @@ where
 {
     let (search_query, set_search_query) = signal(String::new());
     
-    let perform_search = move || {
-        let query = search_query.get();
-        if !query.trim().is_empty() {
-            on_search(query);
+    let perform_search = {
+        let on_search = on_search.clone();
+        let search_query = search_query.clone();
+        move || {
+            let query = search_query.get();
+            if !query.trim().is_empty() {
+                on_search(query);
+            }
         }
     };
     
@@ -383,13 +387,19 @@ where
                     placeholder="Search conversation content..."
                     value=move || search_query.get()
                     on:input=move |ev| set_search_query.set(event_target_value(&ev))
-                    on:keydown=move |ev| {
-                        if ev.key() == "Enter" {
-                            perform_search();
+                    on:keydown={
+                        let perform_search = perform_search.clone();
+                        move |ev| {
+                            if ev.key() == "Enter" {
+                                perform_search();
+                            }
                         }
                     }
                 />
-                <button on:click=move |_| perform_search()>"Search"</button>
+                <button on:click={
+                    let perform_search = perform_search.clone();
+                    move |_| perform_search()
+                }>"Search"</button>
             </div>
             
             <div class="search-results">
@@ -400,7 +410,7 @@ where
                             <div class="search-container">
                                 <p class="no-results">"No search results yet. Try searching for something!"</p>
                             </div>
-                        }
+                        }.into_any()
                     } else {
                         view! {
                             <div class="search-container">
@@ -425,7 +435,7 @@ where
                                     }).collect::<Vec<_>>()}
                                 </div>
                             </div>
-                        }
+                        }.into_any()
                     }
                 }}
             </div>
