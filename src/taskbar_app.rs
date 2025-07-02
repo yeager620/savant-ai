@@ -169,8 +169,14 @@ pub fn TaskbarApp() -> impl IntoView {
         <div class="taskbar-app">
             <Show when=move || app_mode.get() == AppMode::Chat>
                 <MinimalChat 
-                    on_browser_mode=Some(Box::new(move || set_app_mode.set(AppMode::Browser)))
-                    on_database_mode=Some(Box::new(move || set_app_mode.set(AppMode::Database)))
+                    on_browser_mode={
+                        let set_app_mode = set_app_mode.clone();
+                        Some(Box::new(move || set_app_mode.set(AppMode::Browser)) as Box<dyn Fn() + Send>)
+                    }
+                    on_database_mode={
+                        let set_app_mode = set_app_mode.clone();
+                        Some(Box::new(move || set_app_mode.set(AppMode::Database)) as Box<dyn Fn() + Send>)
+                    }
                 />
             </Show>
             

@@ -36,6 +36,7 @@ regex = "1.0"
 savant-audio = { path = "../crates/savant-audio" }
 savant-stt = { path = "../crates/savant-stt" }
 savant-db = { path = "../crates/savant-db" }
+savant-mcp = { path = "../crates/savant-mcp" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"

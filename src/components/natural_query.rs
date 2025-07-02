@@ -2,9 +2,11 @@
 //! 
 //! Provides a user-friendly interface for querying the conversation database with natural language
 
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use web_sys::console;
 
 #[wasm_bindgen]
 extern "C" {
@@ -96,19 +98,19 @@ async fn search_conversations(query: String, limit: Option<usize>) -> Result<Vec
 /// Main natural language query interface component
 #[component]
 pub fn NaturalQueryInterface() -> impl IntoView {
-    let (query, set_query) = create_signal(String::new());
-    let (loading, set_loading) = create_signal(false);
-    let (response, set_response) = create_signal(None::<QueryResponse>);
-    let (active_tab, set_active_tab) = create_signal("query");
-    let (database_stats, set_database_stats) = create_signal(None::<DatabaseStats>);
-    let (search_results, set_search_results) = create_signal(Vec::<SearchResult>::new());
+    let (query, set_query) = signal(String::new());
+    let (loading, set_loading) = signal(false);
+    let (response, set_response) = signal(None::<QueryResponse>);
+    let (active_tab, set_active_tab) = signal("query");
+    let (database_stats, set_database_stats) = signal(None::<DatabaseStats>);
+    let (search_results, set_search_results) = signal(Vec::<SearchResult>::new());
     
     // Load database stats on mount
-    create_effect(move |_| {
+    let _effect = Effect::new(move |_| {
         spawn_local(async move {
             match get_database_stats().await {
-                Ok(stats) => set_database_stats(Some(stats)),
-                Err(e) => log::error!("Failed to load database stats: {}", e),
+                Ok(stats) => set_database_stats.set(Some(stats)),
+                Err(e) => console::log_1(&format!("Failed to load database stats: {}", e).into()),
             }
         });
     });
@@ -119,17 +121,17 @@ pub fn NaturalQueryInterface() -> impl IntoView {
             return;
         }
         
-        set_loading(true);
+        set_loading.set(true);
         
         spawn_local(async move {
             match execute_natural_query(current_query).await {
                 Ok(result) => {
-                    set_response(Some(result));
-                    set_loading(false);
+                    set_response.set(Some(result));
+                    set_loading.set(false);
                 }
                 Err(e) => {
-                    log::error!("Query failed: {}", e);
-                    set_response(Some(QueryResponse {
+                    console::log_1(&format!("Query failed: {}", e).into());
+                    set_response.set(Some(QueryResponse {
                         success: false,
                         results: serde_json::Value::Null,
                         summary: format!("Error: {}", e),
@@ -138,7 +140,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                         result_count: 0,
                         error: Some(e),
                     }));
-                    set_loading(false);
+                    set_loading.set(false);
                 }
             }
         });
@@ -151,8 +153,8 @@ pub fn NaturalQueryInterface() -> impl IntoView {
         
         spawn_local(async move {
             match search_conversations(search_query, Some(20)).await {
-                Ok(results) => set_search_results(results),
-                Err(e) => log::error!("Search failed: {}", e),
+                Ok(results) => set_search_results.set(results),
+                Err(e) => console::log_1(&format!("Search failed: {}", e).into()),
             }
         });
     };
@@ -200,7 +202,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                             <textarea
                                 placeholder="Ask anything about your conversations..."
                                 value=move || query.get()
-                                on:input=move |ev| set_query(event_target_value(&ev))
+                                on:input=move |ev| set_query.set(event_target_value(&ev))
                                 on:keydown=move |ev| {
                                     if ev.key() == "Enter" && !ev.shift_key() {
                                         ev.prevent_default();
@@ -372,7 +374,7 @@ fn SearchInterface<F>(
 where
     F: Fn(String) + 'static + Clone,
 {
-    let (search_query, set_search_query) = create_signal(String::new());
+    let (search_query, set_search_query) = signal(String::new());
     
     let perform_search = move || {
         let query = search_query.get();
@@ -388,7 +390,7 @@ where
                     type="text"
                     placeholder="Search conversation content..."
                     value=move || search_query.get()
-                    on:input=move |ev| set_search_query(event_target_value(&ev))
+                    on:input=move |ev| set_search_query.set(event_target_value(&ev))
                     on:keydown=move |ev| {
                         if ev.key() == "Enter" {
                             perform_search();

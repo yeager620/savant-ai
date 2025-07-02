@@ -8,7 +8,8 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 
-use savant_db::{TranscriptDatabase, MCPServer, QueryProcessor, ConversationContextManager, QueryOptimizer, UserFeedback, LLMQueryResult, LLMConfig, LLMClientFactory};
+use savant_db::{TranscriptDatabase, QueryProcessor, QueryOptimizer, UserFeedback, LLMQueryResult, LLMConfig, LLMClientFactory};
+use savant_mcp::MCPServer;
 
 /// Shared MCP server state
 pub type MCPServerState = Arc<Mutex<Option<MCPServer>>>;
@@ -146,10 +147,15 @@ pub async fn start_mcp_server(
     *server_guard = Some(mcp_server);
     
     // Start server in background task (stdio mode)
-    let server_clone = server_guard.as_ref().unwrap();
+    let mcp_server_state_clone = mcp_server_state.inner().clone();
+    drop(server_guard);
+    
     tokio::spawn(async move {
-        if let Err(e) = server_clone.start_stdio_server().await {
-            log::error!("MCP server failed: {}", e);
+        let server_guard = mcp_server_state_clone.lock().await;
+        if let Some(server) = server_guard.as_ref() {
+            if let Err(e) = server.start_stdio_server().await {
+                log::error!("MCP server failed: {}", e);
+            }
         }
     });
     
@@ -209,7 +215,7 @@ pub async fn get_database_stats(
     let stats = database.get_speaker_stats().await
         .map_err(|e| e.to_string())?;
     
-    let conversations = database.list_conversations(Some(1)).await
+    let _conversations = database.list_conversations(Some(1)).await
         .map_err(|e| e.to_string())?;
     
     let total_duration: f64 = stats.iter().map(|s| s.total_duration_seconds).sum();
@@ -250,9 +256,9 @@ pub async fn search_conversations(
     let formatted_results: Vec<serde_json::Value> = results.into_iter().map(|result| {
         serde_json::json!({
             "text": result.text,
-            "speaker": result.speaker,
+            "speaker": result.speaker_id,
             "timestamp": result.timestamp,
-            "confidence": result.confidence,
+            "confidence": result.similarity_score,
             "conversation_id": result.conversation_id
         })
     }).collect();
@@ -277,8 +283,8 @@ pub async fn analyze_conversation(
                 "analysis": {
                     "topics": analysis.topics,
                     "sentiment_score": analysis.sentiment_score,
-                    "total_duration": analysis.total_duration,
-                    "participants": analysis.participants,
+                    "duration": analysis.duration,
+                    "participant_count": analysis.participant_count,
                     "summary": analysis.summary
                 }
             }))
