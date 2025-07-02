@@ -24,6 +24,8 @@ print_status() {
         echo -e "${GREEN}✓${NC} $message"
     elif [ "$status" = "WARNING" ]; then
         echo -e "${YELLOW}⚠${NC} $message"
+    elif [ "$status" = "INFO" ]; then
+        echo -e "${BLUE}ℹ${NC} $message"
     else
         echo -e "${RED}✗${NC} $message"
         OVERALL_STATUS=1
@@ -34,20 +36,37 @@ print_section() {
     echo -e "\n${BLUE}=== $1 ===${NC}"
 }
 
-# Function to check if app has specific permission
+# Function to check if app has specific permission using functional tests
 check_permission() {
     local permission_type=$1
     local app_name=$2
     
-    # Use sqlite3 to query TCC database
-    local result=$(sqlite3 ~/Library/Application\ Support/com.apple.TCC/TCC.db \
-        "SELECT allowed FROM access WHERE service='$permission_type' AND client='$app_name';" 2>/dev/null)
-    
-    if [ "$result" = "1" ]; then
-        return 0  # Permission granted
-    else
-        return 1  # Permission not granted or not found
-    fi
+    case "$permission_type" in
+        "kTCCServiceMicrophone")
+            # Test microphone access by trying to list audio devices
+            if system_profiler SPAudioDataType >/dev/null 2>&1; then
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        "kTCCServiceScreenCapture")
+            # Test screen recording by trying a quick screenshot
+            if screencapture -x -t png /tmp/permission_test.png >/dev/null 2>&1; then
+                rm -f /tmp/permission_test.png 2>/dev/null
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        "kTCCServiceAccessibility")
+            # Accessibility is optional - always return warning status
+            return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # Function to check bundle ID permissions

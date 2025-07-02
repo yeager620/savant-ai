@@ -12,7 +12,7 @@ DAEMON_SCRIPT="$SCRIPT_DIR/savant-video-daemon.sh"
 # Configuration
 PID_FILE="$HOME/.config/savant-ai/video-daemon.pid"
 LOG_DIR="$HOME/.config/savant-ai/daemon-logs"
-CAPTURE_DIR="$HOME/.config/savant-ai/video-captures"
+CAPTURE_DIR="$HOME/Library/Application Support/savant-ai/video-captures"
 LOG_FILE="$LOG_DIR/video-daemon.log"
 ERROR_LOG="$LOG_DIR/video-daemon-error.log"
 

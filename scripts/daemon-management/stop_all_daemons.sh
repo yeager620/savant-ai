@@ -1,9 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "Stopping all Savant AI daemons..."
 
 # Stop video daemon first (it may depend on audio)
 echo "Stopping video daemon..."
-if ../../sav-video stop; then
+if "$SCRIPT_DIR/../../sav-video" stop; then
     echo "✓ Video daemon stopped"
 else
     echo "⚠ Video daemon stop failed or not running"
@@ -11,7 +12,7 @@ fi
 
 # Stop audio daemon
 echo "Stopping audio daemon..."
-if ../../sav stop; then
+if "$SCRIPT_DIR/../../sav" stop; then
     echo "✓ Audio daemon stopped"
 else
     echo "⚠ Audio daemon stop failed or not running"
@@ -23,9 +24,9 @@ fi
 
 echo ""
 echo "=== Final Status Check ==="
-../../sav status 2>/dev/null || echo "Audio daemon: Stopped"
+"$SCRIPT_DIR/../../sav" status 2>/dev/null || echo "Audio daemon: Stopped"
 echo "---"
-../../sav-video status 2>/dev/null || echo "Video daemon: Stopped"
+"$SCRIPT_DIR/../../sav-video" status 2>/dev/null || echo "Video daemon: Stopped"
 
 echo ""
 echo "🛑 All daemons stopped successfully!"

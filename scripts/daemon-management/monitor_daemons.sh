@@ -35,11 +35,19 @@ show_resources() {
 show_recent_logs() {
     echo ""
     echo "📝 Recent Audio Logs (last 3 lines):"
-    "$PROJECT_ROOT/sav" logs 2>/dev/null | tail -3 | sed 's/^/  /' || echo "  No audio logs available"
+    if [ -f "$PROJECT_ROOT/data/daemon-logs/savant-audio-daemon.log" ]; then
+        tail -3 "$PROJECT_ROOT/data/daemon-logs/savant-audio-daemon.log" | sed 's/^/  /'
+    else
+        echo "  No audio logs available"
+    fi
     
     echo ""
     echo "📝 Recent Video Logs (last 3 lines):"
-    "$PROJECT_ROOT/sav-video" logs 2>/dev/null | tail -3 | sed 's/^/  /' || echo "  No video logs available"
+    if [ -f "$HOME/.config/savant-ai/daemon-logs/video-daemon.log" ]; then
+        tail -3 "$HOME/.config/savant-ai/daemon-logs/video-daemon.log" | sed 's/^/  /'
+    else
+        echo "  No video logs available"
+    fi
 }
 
 # Function to check Ollama status

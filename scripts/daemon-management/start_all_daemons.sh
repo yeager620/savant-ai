@@ -1,4 +1,5 @@
 #!/bin/bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "Starting Savant AI multimodal daemons..."
 
 # Check dependencies
@@ -35,7 +36,7 @@ timeout 10 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; d
 
 # Start audio daemon
 echo "Starting audio daemon..."
-if ../../sav start; then
+if "$SCRIPT_DIR/../../sav" start; then
     echo "✓ Audio daemon started successfully"
 else
     echo "⚠ Audio daemon failed to start (may already be running)"
@@ -46,7 +47,7 @@ sleep 2
 
 # Start enhanced video daemon with all features
 echo "Starting video daemon with multimodal analysis..."
-if ../../sav-video start --interval 30 --enable-ocr --enable-vision --enable-correlation; then
+if "$SCRIPT_DIR/../../sav-video" start --interval 30 --enable-ocr --enable-vision --enable-correlation; then
     echo "✓ Video daemon started successfully"
 else
     echo "⚠ Video daemon failed to start (may already be running)"
@@ -54,9 +55,9 @@ fi
 
 echo ""
 echo "=== Daemon Status ==="
-../../sav status 2>/dev/null || echo "Audio daemon: Unknown status"
+"$SCRIPT_DIR/../../sav" status 2>/dev/null || echo "Audio daemon: Unknown status"
 echo "---"
-../../sav-video status 2>/dev/null || echo "Video daemon: Unknown status"
+"$SCRIPT_DIR/../../sav-video" status 2>/dev/null || echo "Video daemon: Unknown status"
 
 echo ""
 echo "🚀 All daemons startup complete!"
@@ -66,8 +67,8 @@ echo "  ./monitor-daemons (from project root)"
 echo "  ./scripts/daemon-management/monitor_daemons.sh"
 echo ""
 echo "🔍 Check logs with:"
-echo "  ../../sav logs"
-echo "  ../../sav-video logs"
+echo "  \"$SCRIPT_DIR/../../sav\" logs"
+echo "  \"$SCRIPT_DIR/../../sav-video\" logs"
 echo ""
 echo "🛑 Stop all with:"
 echo "  ./stop-daemons (from project root)"
