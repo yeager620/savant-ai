@@ -17,12 +17,14 @@ pub mod semantic_search;
 pub mod security;
 pub mod natural_query;
 pub mod llm_client;
+pub mod visual_data;
 
 pub use speaker_identification::{Speaker, SpeakerIdentifier, SpeakerMatch, MatchMethod};
 pub use semantic_search::{SemanticSearchEngine, SearchResult, ConversationAnalysis, Topic};
 pub use security::{QuerySecurityManager, SecurityError, QueryComplexity};
 pub use natural_query::{NaturalLanguageQueryParser, QueryIntent, IntentType, QueryResult, QueryProcessor, ConversationContextManager, QueryOptimizer, UserFeedback, LLMQueryResult};
 pub use llm_client::{LLMClient, LLMClientFactory, LLMConfig, OllamaClient, OpenAIClient, MockLLMClient};
+pub use visual_data::{VisualDataManager, VideoQuery, VideoStats, ApplicationUsage, ActivitySummary, CodeAnalysis};
 
 /// Database connection manager with speaker identification and semantic search
 pub struct TranscriptDatabase {
@@ -116,6 +118,7 @@ impl TranscriptDatabase {
         // Check and run migrations individually
         self.run_migration("001", "../migrations/001_initial.sql").await?;
         self.run_migration("002", "../migrations/002_speaker_identification.sql").await?;
+        self.run_migration("005", "../migrations/005_visual_data.sql").await?;
         // Skip complex migrations for now due to SQL parsing issues
         // self.run_migration("003", "../migrations/003_llm_integration.sql").await?;
         // self.run_migration("004", "../migrations/004_database_optimizations.sql").await?;
@@ -154,6 +157,7 @@ impl TranscriptDatabase {
             "../migrations/002_speaker_identification.sql" => include_str!("../migrations/002_speaker_identification.sql"),
             "../migrations/003_llm_integration.sql" => include_str!("../migrations/003_llm_integration.sql"),
             "../migrations/004_database_optimizations.sql" => include_str!("../migrations/004_database_optimizations.sql"),
+            "../migrations/005_visual_data.sql" => include_str!("../migrations/005_visual_data.sql"),
             _ => return Err(anyhow::anyhow!("Unknown migration file: {}", file_path)),
         };
         

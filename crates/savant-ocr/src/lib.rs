@@ -8,11 +8,13 @@ pub mod engine;
 pub mod preprocessor;
 pub mod classifier;
 pub mod analyzer;
+pub mod comprehensive_extractor;
 
 pub use engine::{OCREngine, TesseractEngine};
 pub use preprocessor::{ImagePreprocessor, PreprocessingConfig};
 pub use classifier::{TextClassifier, TextType};
 pub use analyzer::{StructuredContentAnalyzer, StructuredContent};
+pub use comprehensive_extractor::{ComprehensiveOCRProcessor, ComprehensiveOCRResult, WordData, LineData, ParagraphData};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoundingBox {

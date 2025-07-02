@@ -19,21 +19,39 @@ impl Default for VideoConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureConfig {
-    pub interval_seconds: u32,
+    pub interval_milliseconds: u32, // Changed to milliseconds for sub-second precision
     pub enabled_hours: Option<TimeRange>,
     pub quality: ImageQuality,
     pub notify_user: bool,
     pub stealth_mode: bool, // For invisibility to external capture
+    pub continuous_mode: bool, // Enable continuous high-frequency capture
+    pub auto_compress: bool, // Automatically compress captured images
+    pub max_resolution: Option<(u32, u32)>, // Maximum resolution for compression
+    pub enable_processing: bool, // Enable automated OCR/vision processing
+    pub processing_interval: u32, // Process every Nth frame
+    pub change_detection_threshold: f32, // Minimum change to trigger processing (0.0-1.0)
+    pub enable_full_text_extraction: bool, // Extract ALL text with positions
+    pub enable_real_time_analysis: bool, // Real-time task/question detection
+    pub buffer_size: usize, // Number of frames to buffer for change detection
 }
 
 impl Default for CaptureConfig {
     fn default() -> Self {
         Self {
-            interval_seconds: 60,
+            interval_milliseconds: 500, // 500ms = 2 FPS for continuous monitoring
             enabled_hours: None,
-            quality: ImageQuality::Medium,
-            notify_user: true,
+            quality: ImageQuality::Medium, // Balance quality vs speed
+            notify_user: false, // Disable notifications for continuous mode
             stealth_mode: true, // Default to stealth for privacy
+            continuous_mode: true, // Enable continuous high-frequency capture
+            auto_compress: true, // Automatically compress captured images
+            max_resolution: Some((1920, 1080)), // Higher res for better text extraction
+            enable_processing: true, // Enable automated OCR/vision processing
+            processing_interval: 1, // Process every frame for full monitoring
+            change_detection_threshold: 0.05, // 5% change threshold
+            enable_full_text_extraction: true, // Extract ALL text with positions
+            enable_real_time_analysis: true, // Real-time task/question detection
+            buffer_size: 10, // Keep 10 frames for change detection
         }
     }
 }
