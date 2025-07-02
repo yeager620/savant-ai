@@ -1,153 +1,115 @@
 # Savant AI
 
-An invisible, seamless AI assistant with real-time system audio transcription, smart long-term memory, standard chat capabilities, [ADD REST OF FEATURES HERE], and [WIP] browser monitoring.
+Invisible AI assistant with real-time audio transcription, smart database, and UNIX philosophy CLI tools. Operates as seamless sidebar with browser monitoring and stealth capabilities.
 
-*Only works on MacOS as of now*
+*macOS only*
 
-## **TODO:**
-- ✅ ~~Determine behaviour and implement data pipeline from audio transcripts to smart database~~
-- ✅ ~~Implement MCP server for chatbot to interact with smart database~~
-- Figure out how to replicate app functionality on non MacOS systems, i.e. Windows & Linux
-- Figure out how to containerize application and distribute; i.e. automate release cycle
-- Implement more flexible / robust chatbot API solution; allow for use on machines that can t run Ollama models locally; allow for use of different models
-- Fix non-functional browser monitor module and repair / update the GUI 
-- Enhance speaker identification with ML models (pyannote-audio integration)
-- Add semantic embeddings for advanced conversation search 
+## Features
 
-## Core Features
-- **Audio Transcription**: Real-time speech-to-text pipeline with background daemon monitoring all audio I/O
-- **Smart Memory**: SQLite database with speaker identification and conversation analytics
-- **Natural Language Queries**: Ask your database questions in plain English via chat interface
-- **LLM Integration**: Model Context Protocol (MCP) server for external LLM access to conversation data
-- **Speaker Recognition**: Text-pattern based identification with framework for voice biometrics
-- **Semantic Search**: Full-text and similarity-based search across all conversations
-- **Chat Assistant**: Local Ollama integration with conversation memory and automatic startup
-- **Browser Monitoring**: Accessibility API-based content detection (WIP)
-- **Invisibility**: Hidden from external screen capture and screenshots
-
-## Architecture
-
-### Uses a set of self-contained, multi-purpose modules connected by data pipes (usually in the form of text streams) which can each also be used and standalone CLI apps
-
-```mermaid
-graph TB
-    subgraph "Desktop App"
-        UI[Leptos Frontend] --> Backend[Tauri Backend]
-        Backend --> Tray[System Tray]
-    end
-    
-    subgraph "UNIX CLI Tools"
-        Audio[savant-audio] --> STT[savant-stt]
-        STT --> Transcribe[savant-transcribe]
-        Transcribe --> DB[savant-db]
-        LLM[savant-llm]
-        MCP[savant-mcp-server]
-    end
-    
-    subgraph "External Services"
-        Ollama[Ollama Local LLM]
-        Browser[Browser Tabs]
-        Whisper[Whisper Models]
-        Claude[Claude Desktop]
-        ChatGPT[External LLMs]
-    end
-    
-    Backend <--> Ollama
-    Backend <--> Browser
-    Backend <--> DB
-    Transcribe <--> Whisper
-    MCP <--> DB
-    Claude <--> MCP
-    ChatGPT <--> MCP
-    
-    style UI fill:#4169e1
-    style Transcribe fill:#00ff41
-    style DB fill:#ff6b35
-```
-
-## Audio Pipeline
-
-```mermaid
-sequenceDiagram
-    participant Mic as Microphone
-    participant Sys as System Audio
-    participant Cap as Audio Capture
-    participant STT as Speech-to-Text
-    participant DB as Database
-    
-    Mic->>Cap: User speech
-    Sys->>Cap: Computer audio
-    Cap->>STT: Raw audio samples
-    STT->>STT: Whisper processing
-    STT->>STT: Post-process silence
-    STT->>DB: JSON with metadata
-    DB->>DB: Store + index
-```
+- **Audio Pipeline**: Real-time speech-to-text with speaker separation + Whisper processing
+- **Smart Database**: SQLite with analytics + MCP server for LLM integration  
+- **Natural Language Queries**: Plain English database queries via chat interface
+- **UNIX CLI Tools**: Composable command-line utilities following data pipeline principles
+- **LLM Integration**: Multi-provider support (Ollama, OpenAI, DeepSeek, Anthropic)
+- **Browser Monitoring**: Accessibility API content detection
+- **Stealth Mode**: Hidden from screenshots with system tray operation
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Dependencies
 brew install ollama
 ollama pull devstral && ollama serve
 
-# Clone and run
-git clone <repo>
-cd savant-ai
+# Run application
+git clone <repo> && cd savant-ai
 cargo tauri dev
 
-# CLI tools
-cargo run --package savant-transcribe -- --language en --duration 10
-cargo run --package savant-db -- list
-cargo run --package savant-db -- search "meeting" --limit 10
-cargo run --package savant-db -- speaker list
-
-# MCP server for external LLM integration
-cargo run --package savant-mcp -- --help
-cargo build --release && ./target/release/savant-mcp-server
-
-# Audio daemon
-./sav start
-./sav status
+# Test CLI tools
+./test-mcp-natural-queries.sh  # MCP + LLM integration
+./test-database-sql.sh         # Direct database access
 ```
 
-## Project Structure
+## CLI Tools
 
+```bash
+# Audio transcription
+savant-transcribe --speaker "user" --duration 10
+
+# Database queries  
+savant-db list --limit 10
+savant-db query --speaker "john" --text "meeting"
+
+# LLM inference
+echo "prompt" | savant-llm --model devstral | jq '.content'
+
+# MCP server for external LLMs
+savant-mcp --llm-provider ollama
 ```
-savant-ai/
-├── src/                    # Leptos frontend (WASM)
-├── src-tauri/              # Tauri desktop backend
-├── crates/
-│   ├── savant-transcribe/  # Audio → JSON transcription
-│   ├── savant-db/          # Database management
-│   ├── savant-llm/         # LLM inference CLI
-│   └── savant-{audio,stt,core}/  # Supporting libraries
-└── docs/                   # Detailed documentation
+
+## Architecture
+
+### Desktop App
+- **Frontend**: Leptos WASM (taskbar UI)
+- **Backend**: Tauri (commands, tray, stealth)
+
+### UNIX Tools
+- `savant-transcribe` - Audio → text with speaker ID
+- `savant-db` - Database management + MCP server
+- `savant-llm` - LLM inference engine
+- `savant-mcp` - Model Context Protocol server
+
+### Data Flow
+```
+Microphone → Audio Capture → Whisper STT → Database → MCP Server → External LLMs
+System Audio → Audio Capture → Speaker Detection → Analytics → Natural Language Queries
+```
+
+## MCP Integration
+
+Smart database server exposing conversation data to LLMs via JSON-RPC 2.0:
+
+```bash
+# Start MCP server
+savant-mcp --llm-provider ollama
+
+# Query conversations naturally
+curl -X POST stdin <<< '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"query_conversations","arguments":{"query":"Find meetings about project alpha"}}}'
+```
+
+**Tools**: `query_conversations`, `get_speaker_analytics`, `search_semantic`, `get_database_stats`
+**Resources**: `conversations://list`, `speakers://list`, `schema://database`
+
+## Development
+
+```bash
+cargo tauri dev              # Full app development
+cargo test --workspace       # Run all tests
+cargo build --release        # Production build
+
+# Individual components
+trunk serve                   # Frontend only
+cargo run --package savant-db -- --help
 ```
 
 ## Configuration
 
-Settings in `~/.config/savant-ai/config.toml`:
+`~/.config/savant-ai/config.toml`:
+- AI provider settings + API keys
+- Audio transcription preferences  
+- Browser monitoring configuration
+- Stealth mode options
 
-```toml
-[ai_providers]
-default_provider = "ollama"
+## Platform Requirements
 
-[transcription]
-default_language = "en"
-auto_speaker_detection = true
-```
+- **macOS**: Accessibility API + microphone permissions
+- **Ollama**: Local LLM runtime (`ollama serve`)
+- **Dependencies**: Built into Cargo workspace
 
-## Documentation
+## UNIX Philosophy
 
-- **[Architecture & Setup](docs/architecture.md)** - Detailed system design
-- **[CLI Tools Guide](docs/cli-tools.md)** - UNIX tool usage patterns  
-- **[Audio Transcription](docs/audio-transcription.md)** - Recording and processing
-- **[Database System](docs/database.md)** - Storage and querying
-- **[Deprecations](docs/deprecations.md)** - Cleanup and migration guide
-
-## Status
-
-**Working**: Audio transcription, chat assistant, browser monitoring, CLI tools  
-**In Progress**: Database integration, frontend optimization  
-**Planned**: Voice profiles, real-time streaming, advanced analytics
+Each tool does one thing well:
+- **Single Purpose**: Focused, testable components
+- **Text Streams**: JSON I/O for data exchange
+- **Composability**: Tools pipe together naturally
+- **Independence**: Can run without main application
