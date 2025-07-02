@@ -39,8 +39,8 @@ extern "C" {
 
 #[component] 
 pub fn MinimalChat(
-    #[prop(optional)] on_browser_mode: Option<Box<dyn Fn() + Send + 'static>>,
-    #[prop(optional)] on_database_mode: Option<Box<dyn Fn() + Send + 'static>>,
+    #[prop(optional)] on_browser_mode: Option<Box<dyn Fn() + Send + Sync + 'static>>,
+    #[prop(optional)] on_database_mode: Option<Box<dyn Fn() + Send + Sync + 'static>>,
 ) -> impl IntoView {
     let (messages, set_messages) = signal(Vec::<ChatMessage>::new());
     let (input_text, set_input_text) = signal(String::new());
@@ -112,7 +112,7 @@ pub fn MinimalChat(
             };
             
             // Clone user message for history before it's moved
-            let user_message_for_history = user_message.clone();
+            let _user_message_for_history = user_message.clone();
             
             set_messages.update(|msgs| {
                 msgs.push(user_message);
@@ -191,30 +191,42 @@ pub fn MinimalChat(
             <div class="chat-header">
                 <h3>"Savant AI"</h3>
                 <div class="header-right">
-                    {move || on_database_mode.as_ref().map(|handler| {
-                        let handler = handler.clone();
-                        view! {
+                    {if on_database_mode.is_some() {
+                        let on_database_mode_clone = on_database_mode.clone();
+                        Some(view! {
                             <button 
                                 class="browser-toggle database-toggle"
                                 title="Open Database Query Interface"
-                                on:click=move |_| handler()
+                                on:click=move |_| {
+                                    if let Some(ref handler) = on_database_mode_clone {
+                                        handler();
+                                    }
+                                }
                             >
                                 "DB"
                             </button>
-                        }
-                    })}
-                    {move || on_browser_mode.as_ref().map(|handler| {
-                        let handler = handler.clone();
-                        view! {
+                        })
+                    } else {
+                        None
+                    }}
+                    {if on_browser_mode.is_some() {
+                        let on_browser_mode_clone = on_browser_mode.clone();
+                        Some(view! {
                             <button 
                                 class="browser-toggle"
                                 title="Open Browser Assistant"
-                                on:click=move |_| handler()
+                                on:click=move |_| {
+                                    if let Some(ref handler) = on_browser_mode_clone {
+                                        handler();
+                                    }
+                                }
                             >
                                 "browser"
                             </button>
-                        }
-                    })}
+                        })
+                    } else {
+                        None
+                    }}
                     <button 
                         class="clear-button"
                         title="Clear chat history"

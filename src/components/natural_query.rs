@@ -164,19 +164,19 @@ pub fn NaturalQueryInterface() -> impl IntoView {
             <div class="tabs">
                 <button 
                     class:active=move || active_tab.get() == "query"
-                    on:click=move |_| set_active_tab("query")
+                    on:click=move |_| set_active_tab.set("query")
                 >
                     "Natural Language Query"
                 </button>
                 <button 
                     class:active=move || active_tab.get() == "search"
-                    on:click=move |_| set_active_tab("search")
+                    on:click=move |_| set_active_tab.set("search")
                 >
                     "Search Conversations"
                 </button>
                 <button 
                     class:active=move || active_tab.get() == "stats"
-                    on:click=move |_| set_active_tab("stats")
+                    on:click=move |_| set_active_tab.set("stats")
                 >
                     "Database Statistics"
                 </button>
@@ -201,7 +201,7 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                         <div class="query-input">
                             <textarea
                                 placeholder="Ask anything about your conversations..."
-                                value=move || query.get()
+                                prop:value=move || query.get()
                                 on:input=move |ev| set_query.set(event_target_value(&ev))
                                 on:keydown=move |ev| {
                                     if ev.key() == "Enter" && !ev.shift_key() {
@@ -225,9 +225,9 @@ pub fn NaturalQueryInterface() -> impl IntoView {
                                 view! {
                                     <div class="query-results">
                                         <div class="result-header">
-                                            <h4>{&resp.summary}</h4>
+                                            <h4>{resp.summary.clone()}</h4>
                                             <div class="result-meta">
-                                                <span class="intent">"Intent: " {&resp.intent_type}</span>
+                                                <span class="intent">"Intent: " {resp.intent_type.clone()}</span>
                                                 <span class="timing">"Time: " {resp.execution_time_ms} "ms"</span>
                                                 <span class="count">"Results: " {resp.result_count}</span>
                                             </div>
@@ -289,79 +289,71 @@ fn QueryResultsDisplay(
     results: serde_json::Value,
     intent_type: String,
 ) -> impl IntoView {
-    match intent_type.as_str() {
-        "find_conversations" => {
-            view! {
-                <div class="conversations-results">
-                    {move || {
-                        if let Some(array) = results.as_array() {
-                            array.iter().map(|item| {
-                                let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled");
-                                let participants = item.get("participants").and_then(|p| p.as_array())
-                                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
-                                    .unwrap_or_else(|| "Unknown".to_string());
-                                let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
-                                
-                                view! {
-                                    <div class="conversation-item">
-                                        <h5>{title}</h5>
-                                        <p>"Participants: " {participants}</p>
-                                        <p>"Duration: " {format!("{:.1} minutes", duration / 60.0)}</p>
-                                    </div>
-                                }
-                            }).collect::<Vec<_>>()
-                        } else {
-                            vec![view! { <p>"No conversations found"</p> }]
-                        }
-                    }}
-                </div>
-            }
-        }
-        "analyze_speaker" => {
-            view! {
-                <div class="speaker-analysis">
-                    {move || {
-                        if let Some(array) = results.as_array() {
-                            array.iter().map(|item| {
-                                let speaker = item.get("speaker").and_then(|s| s.as_str()).unwrap_or("Unknown");
-                                let conv_count = item.get("conversation_count").and_then(|c| c.as_i64()).unwrap_or(0);
-                                let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
-                                let confidence = item.get("avg_confidence").and_then(|c| c.as_f64()).unwrap_or(0.0);
-                                
-                                view! {
-                                    <div class="speaker-stats">
-                                        <h5>{speaker}</h5>
-                                        <div class="stats-grid">
-                                            <div class="stat">
-                                                <label>"Conversations:"</label>
-                                                <span>{conv_count}</span>
-                                            </div>
-                                            <div class="stat">
-                                                <label>"Total Time:"</label>
-                                                <span>{format!("{:.1} hours", duration / 3600.0)}</span>
-                                            </div>
-                                            <div class="stat">
-                                                <label>"Avg Confidence:"</label>
-                                                <span>{format!("{:.1}%", confidence * 100.0)}</span>
-                                            </div>
+    view! {
+        <div class="query-results-display">
+            {match intent_type.as_str() {
+                "find_conversations" => {
+                    if let Some(array) = results.as_array() {
+                        array.iter().map(|item| {
+                            let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled");
+                            let participants = item.get("participants").and_then(|p| p.as_array())
+                                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                                .unwrap_or_else(|| "Unknown".to_string());
+                            let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
+                            
+                            view! {
+                                <div class="conversation-item">
+                                    <h5>{title}</h5>
+                                    <p>"Participants: " {participants}</p>
+                                    <p>"Duration: " {format!("{:.1} minutes", duration / 60.0)}</p>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()
+                    } else {
+                        vec![view! { <p>"No conversations found"</p> }]
+                    }
+                }
+                "analyze_speaker" => {
+                    if let Some(array) = results.as_array() {
+                        array.iter().map(|item| {
+                            let speaker = item.get("speaker").and_then(|s| s.as_str()).unwrap_or("Unknown");
+                            let conv_count = item.get("conversation_count").and_then(|c| c.as_i64()).unwrap_or(0);
+                            let duration = item.get("total_duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
+                            let confidence = item.get("avg_confidence").and_then(|c| c.as_f64()).unwrap_or(0.0);
+                            
+                            view! {
+                                <div class="speaker-stats">
+                                    <h5>{speaker}</h5>
+                                    <div class="stats-grid">
+                                        <div class="stat">
+                                            <label>"Conversations:"</label>
+                                            <span>{conv_count}</span>
+                                        </div>
+                                        <div class="stat">
+                                            <label>"Total Time:"</label>
+                                            <span>{format!("{:.1} hours", duration / 3600.0)}</span>
+                                        </div>
+                                        <div class="stat">
+                                            <label>"Avg Confidence:"</label>
+                                            <span>{format!("{:.1}%", confidence * 100.0)}</span>
                                         </div>
                                     </div>
-                                }
-                            }).collect::<Vec<_>>()
-                        } else {
-                            vec![view! { <p>"No speaker data found"</p> }]
-                        }
-                    }}
-                </div>
-            }
-        }
-        _ => {
-            view! {
-                <div class="generic-results">
-                    <pre>{serde_json::to_string_pretty(&results).unwrap_or_else(|_| "Invalid JSON".to_string())}</pre>
-                </div>
-            }
-        }
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()
+                    } else {
+                        vec![view! { <p>"No speaker data found"</p> }]
+                    }
+                }
+                _ => {
+                    vec![view! {
+                        <div class="generic-results">
+                            <pre>{serde_json::to_string_pretty(&results).unwrap_or_else(|_| "Invalid JSON".to_string())}</pre>
+                        </div>
+                    }]
+                }
+            }}
+        </div>
     }
 }
 
@@ -405,29 +397,33 @@ where
                     let results_vec = results.get();
                     if results_vec.is_empty() {
                         view! {
-                            <p class="no-results">"No search results yet. Try searching for something!"</p>
+                            <div class="search-container">
+                                <p class="no-results">"No search results yet. Try searching for something!"</p>
+                            </div>
                         }
                     } else {
                         view! {
-                            <div class="results-list">
-                                {results_vec.into_iter().map(|result| {
-                                    view! {
-                                        <div class="search-result-item">
-                                            <div class="result-header">
-                                                <span class="speaker">{result.speaker.unwrap_or_else(|| "Unknown".to_string())}</span>
-                                                <span class="timestamp">{result.timestamp}</span>
+                            <div class="search-container">
+                                <div class="results-list">
+                                    {results_vec.into_iter().map(|result| {
+                                        view! {
+                                            <div class="search-result-item">
+                                                <div class="result-header">
+                                                    <span class="speaker">{result.speaker.unwrap_or_else(|| "Unknown".to_string())}</span>
+                                                    <span class="timestamp">{result.timestamp}</span>
+                                                </div>
+                                                <p class="result-text">{result.text}</p>
+                                                {result.confidence.map(|conf| {
+                                                    view! {
+                                                        <div class="confidence">
+                                                            "Confidence: " {format!("{:.1}%", conf * 100.0)}
+                                                        </div>
+                                                    }
+                                                })}
                                             </div>
-                                            <p class="result-text">{result.text}</p>
-                                            {result.confidence.map(|conf| {
-                                                view! {
-                                                    <div class="confidence">
-                                                        "Confidence: " {format!("{:.1}%", conf * 100.0)}
-                                                    </div>
-                                                }
-                                            })}
-                                        </div>
-                                    }
-                                }).collect::<Vec<_>>()}
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
                             </div>
                         }
                     }
