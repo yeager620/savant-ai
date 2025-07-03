@@ -37,6 +37,9 @@ savant-audio = { path = "../crates/savant-audio" }
 savant-stt = { path = "../crates/savant-stt" }
 savant-db = { path = "../crates/savant-db" }
 savant-mcp = { path = "../crates/savant-mcp" }
+savant-video = { path = "../crates/savant-video" }
+savant-llm = { path = "../crates/savant-llm" }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"

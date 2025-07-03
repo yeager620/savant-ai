@@ -187,6 +187,7 @@ pub enum EvidenceType {
     UserBehavior,
 }
 
+#[derive(Debug)]
 pub struct ActivityClassifier {
     classification_rules: Vec<ClassificationRule>,
     context_analyzers: HashMap<String, ContextAnalyzer>,
@@ -221,6 +222,7 @@ struct ExclusionPattern {
     pattern: String,
 }
 
+#[derive(Debug)]
 struct ContextAnalyzer {
     analyzer_type: String,
 }

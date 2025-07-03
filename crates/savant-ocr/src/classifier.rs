@@ -23,9 +23,11 @@ pub enum TextType {
     Button,
     Label,
     TextField,
+    ErrorMessage,
     Unknown,
 }
 
+#[derive(Debug)]
 pub struct TextClassifier {
     patterns: HashMap<TextType, Vec<Regex>>,
     ui_position_classifier: UIPositionClassifier,
@@ -97,6 +99,14 @@ impl TextClassifier {
             Regex::new(r"^\d+\s+\|\s*").unwrap(), // Line numbers
         ]);
 
+        // Error message patterns
+        patterns.insert(TextType::ErrorMessage, vec![
+            Regex::new(r"^Error:|^ERROR:|^Exception:|^EXCEPTION:").unwrap(),
+            Regex::new(r"^SyntaxError|^TypeError|^ValueError|^RuntimeError").unwrap(),
+            Regex::new(r"^Fatal:|^FATAL:|^Failure:|^FAILURE:").unwrap(),
+            Regex::new(r"^\s*at\s+.*:\d+:\d+").unwrap(), // Stack trace lines
+        ]);
+
         // UI element patterns
         patterns.insert(TextType::Button, vec![
             Regex::new(r"^OK$|^Cancel$|^Apply$|^Submit$|^Save$|^Delete$").unwrap(),
@@ -156,6 +166,7 @@ impl TextClassifier {
     }
 }
 
+#[derive(Debug)]
 struct UIPositionClassifier {
     screen_regions: HashMap<ScreenRegion, TextType>,
 }

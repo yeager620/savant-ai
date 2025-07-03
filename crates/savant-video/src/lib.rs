@@ -12,6 +12,10 @@ pub mod multimodal;
 pub mod processor;
 pub mod real_time_analyzer;
 pub mod change_detector;
+pub mod coding_problem_detector;
+pub mod solution_generator;
+pub mod integrated_processor;
+pub mod llm_provider;
 
 pub use capture::VideoCapture;
 pub use config::{CaptureConfig, ImageQuality, VideoConfig};
@@ -19,9 +23,12 @@ pub use privacy::{PrivacyController, PrivacySettings};
 pub use storage::{StorageManager, StorageSettings};
 pub use analyzer::{EnhancedVideoAnalyzer, VideoAnalysisResult, CodeSnippet, InteractionOpportunity};
 pub use multimodal::{MultimodalFrame, MultimodalAnalyzer};
-pub use processor::{VideoProcessor, ProcessingCommand, ProcessingEvent, CompressedFrame};
+pub use processor::{VideoProcessor, ProcessingCommand, ProcessingEvent as VideoProcessingEvent, CompressedFrame};
 pub use real_time_analyzer::{RealTimeAnalyzer, TaskDetectionResult, DetectedTask, DetectedQuestion, AssistanceOpportunity};
 pub use change_detector::{ChangeDetector, ChangeDetectionResult, ChangedRegion, ChangeDetectorConfig};
+pub use coding_problem_detector::{CodingProblemDetector, DetectedCodingProblem, CodingProblemType, DetectionConfig};
+pub use solution_generator::{SolutionGenerator, GeneratedSolution, SolutionConfig};
+pub use integrated_processor::{IntegratedProcessor, ProcessorConfig, ProcessingEvent, ProcessingResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoFrame {

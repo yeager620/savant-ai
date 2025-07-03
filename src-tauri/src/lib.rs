@@ -70,7 +70,14 @@ pub fn run() {
             get_database_stats,
             search_conversations,
             analyze_conversation,
-            list_speakers_with_stats
+            list_speakers_with_stats,
+            // Solution commands
+            init_solution_processor,
+            process_screen_capture,
+            regenerate_solution,
+            apply_solution,
+            copy_to_clipboard,
+            listen_for_solutions
         ])
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
@@ -92,6 +99,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Initialize solution state
+            app.manage(Arc::new(Mutex::new(SolutionState::default())));
+            
             // Initialize database
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

@@ -3,7 +3,7 @@ use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::console;
-use crate::components::{MinimalChat, NaturalQueryInterface};
+use crate::components::{MinimalChat, NaturalQueryInterface, SolutionDisplay};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserWindow {
@@ -73,6 +73,14 @@ pub fn TaskbarApp() -> impl IntoView {
     // Setup browser event listeners
     spawn_local(async move {
         setup_browser_event_listeners(set_browser_state).await;
+    });
+    
+    // Initialize solution processor on startup
+    spawn_local(async move {
+        match crate::commands::init_solution_processor(true).await {
+            Ok(_) => console::log_1(&"Solution processor initialized".into()),
+            Err(e) => console::error_1(&format!("Failed to initialize solution processor: {}", e).into()),
+        }
     });
 
     // Handle keyboard navigation for browser mode
@@ -985,6 +993,9 @@ pub fn TaskbarApp() -> impl IntoView {
                 }
                 "
             </style>
+            
+            // Solution Display Overlay
+            <SolutionDisplay />
         </div>
     }
 }

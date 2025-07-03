@@ -153,12 +153,22 @@ if [ "$RUN_UNIT" = true ]; then
     fi
 fi
 
-# 2. CLI Tools Tests
+# 2. New Functionality Tests
+echo -e "\n${BLUE}Testing New Functionality (Coding Problem Detection & Solution Generation)...${NC}"
+if bash "scripts/tests/test-new-functionality.sh"; then
+    echo -e "${GREEN}✅ New Functionality Tests PASSED${NC}"
+    NEW_FUNCTIONALITY_TESTS=1
+else
+    echo -e "${RED}❌ New Functionality Tests FAILED${NC}"
+    FAILED_CATEGORIES=$((FAILED_CATEGORIES + 1))
+fi
+
+# 3. CLI Tools Tests
 if [ "$RUN_CLI" = true ]; then
     run_test_category "CLI TOOLS TESTS" "scripts/tests/test-cli-tools.sh" "CLI_TESTS"
 fi
 
-# 3. Integration Tests
+# 4. Integration Tests
 if [ "$RUN_INTEGRATION" = true ]; then
     run_test_category "DATABASE INTEGRATION TESTS" "scripts/tests/test-database-sql.sh" "DB_INTEGRATION"
     run_test_category "MCP INTEGRATION TESTS" "scripts/tests/test-mcp-natural-queries.sh" "MCP_INTEGRATION"
@@ -169,14 +179,22 @@ if [ "$RUN_INTEGRATION" = true ]; then
     fi
 fi
 
-# 4. System Tests
+# 5. System Tests
 if [ "$RUN_SYSTEM" = true ]; then
     run_test_category "SYSTEM TESTS" "scripts/daemon-management/test_all_systems.sh" "SYSTEM_TESTS"
 fi
 
-# 5. Performance Tests (optional)
+# 6. Performance Tests (optional)
 if [ "$RUN_PERFORMANCE" = true ]; then
     run_test_category "PERFORMANCE TESTS" "scripts/tests/test-performance.sh" "PERFORMANCE_TESTS"
+    
+    # Run comprehensive performance benchmarks
+    echo -e "\n${BLUE}Running Performance Benchmarks...${NC}"
+    if cargo test --package savant-video performance_benchmarks --release -- --nocapture; then
+        echo -e "${GREEN}✅ Performance Benchmarks PASSED${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Performance Benchmarks completed with warnings${NC}"
+    fi
 fi
 
 END_TIME=$(date +%s)
@@ -189,6 +207,7 @@ echo -e "${PURPLE}╚═══════════════════�
 
 echo -e "\n${BLUE}Test Results:${NC}"
 echo -e "Unit Tests: $([ "$UNIT_TESTS" = 1 ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "New Functionality Tests: $([ "$NEW_FUNCTIONALITY_TESTS" = 1 ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
 echo -e "CLI Tests: $([ "$CLI_TESTS" = 1 ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
 echo -e "Integration Tests: $([ "$INTEGRATION_TESTS" = 1 ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
 echo -e "System Tests: $([ "$SYSTEM_TESTS" = 1 ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"

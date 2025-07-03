@@ -7,6 +7,7 @@ pub mod llm_database;
 pub mod system;
 pub mod audio;
 pub mod system_audio;
+pub mod solutions;
 
 pub use browser::*;
 pub use chat_history::*;
@@ -17,3 +18,4 @@ pub use llm_database::*;
 pub use system::*;
 // pub use audio::*;  // Not currently used in main handler
 pub use system_audio::*;
+pub use solutions::*;

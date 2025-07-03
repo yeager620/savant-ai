@@ -17,6 +17,7 @@ pub trait Detector: Send + Sync {
     async fn detect(&self, image: &DynamicImage) -> Result<DetectionResult>;
 }
 
+#[derive(Debug)]
 pub struct ObjectDetector {
     // Placeholder for ML model integration
 }
@@ -33,6 +34,7 @@ impl ObjectDetector {
     }
 }
 
+#[derive(Debug)]
 pub struct UIDetector {
     button_patterns: Vec<ButtonPattern>,
     window_detector: WindowDetector,
@@ -180,6 +182,7 @@ impl UIDetector {
     }
 }
 
+#[derive(Debug)]
 struct WindowDetector;
 
 impl WindowDetector {
@@ -194,6 +197,7 @@ impl WindowDetector {
     }
 }
 
+#[derive(Debug)]
 pub struct AppDetector {
     app_signatures: AppSignatureDatabase,
 }
@@ -247,6 +251,7 @@ impl AppDetector {
     }
 }
 
+#[derive(Debug)]
 struct AppSignatureDatabase {
     signatures: Vec<AppSignature>,
 }

@@ -118,6 +118,7 @@ impl Default for ChangeDetectorConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct ChangeDetector {
     config: ChangeDetectorConfig,
     frame_buffer: VecDeque<FrameBuffer>,
@@ -528,6 +529,7 @@ impl ChangeDetector {
 
 // Supporting structs and functions
 
+#[derive(Debug)]
 struct RegionAnalyzer;
 
 impl RegionAnalyzer {

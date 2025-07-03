@@ -156,6 +156,7 @@ pub enum EvidenceType {
     NavigationStructure,
 }
 
+#[derive(Debug)]
 pub struct ContextAnalyzer {
     color_analyzer: ColorAnalyzer,
     layout_analyzer: LayoutAnalyzer,
@@ -306,6 +307,7 @@ impl ContextAnalyzer {
     }
 }
 
+#[derive(Debug)]
 struct ColorAnalyzer;
 
 impl ColorAnalyzer {
@@ -390,6 +392,7 @@ impl ColorAnalyzer {
     }
 }
 
+#[derive(Debug)]
 struct LayoutAnalyzer;
 
 impl LayoutAnalyzer {
@@ -465,6 +468,7 @@ impl LayoutAnalyzer {
     }
 }
 
+#[derive(Debug)]
 struct AttentionAnalyzer;
 
 impl AttentionAnalyzer {

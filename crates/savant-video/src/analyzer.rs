@@ -210,7 +210,7 @@ impl EnhancedVideoAnalyzer {
 
         Ok(Self {
             ocr_processor: OCRProcessor::new(ocr_config)?,
-            vision_analyzer: VisionAnalyzer::new()?,
+            vision_analyzer: VisionAnalyzer::new(Default::default())?,
             context_analyzer: ContextAnalyzer::new(),
             opportunity_detector: OpportunityDetector::new(),
         })
@@ -232,7 +232,7 @@ impl EnhancedVideoAnalyzer {
 
         // Perform vision analysis
         let vision_start = std::time::Instant::now();
-        let screen_analysis = match self.vision_analyzer.analyze_screenshot(image).await {
+        let screen_analysis = match self.vision_analyzer.analyze_screen(image).await {
             Ok(analysis) => Some(analysis),
             Err(e) => {
                 tracing::warn!("Vision analysis failed: {}", e);

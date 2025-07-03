@@ -299,6 +299,7 @@ pub struct ThemeInfo {
     pub wallpaper_type: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct VisionAnalyzer {
     pub object_detector: ObjectDetector,
     pub ui_detector: UIDetector,
@@ -309,7 +310,7 @@ pub struct VisionAnalyzer {
 }
 
 impl VisionAnalyzer {
-    pub fn new() -> Result<Self> {
+    pub fn new(_config: VisionConfig) -> Result<Self> {
         Ok(Self {
             object_detector: ObjectDetector::new(),
             ui_detector: UIDetector::new(),
@@ -320,7 +321,7 @@ impl VisionAnalyzer {
         })
     }
 
-    pub async fn analyze_screenshot(&self, image: &DynamicImage) -> Result<ScreenAnalysis> {
+    pub async fn analyze_screen(&self, image: &DynamicImage) -> Result<ScreenAnalysis> {
         let start_time = std::time::Instant::now();
 
         // Detect visual elements
@@ -371,4 +372,23 @@ pub struct ImageMetadata {
     pub height: u32,
     pub format: String,
     pub file_size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VisionConfig {
+    pub enable_app_detection: bool,
+    pub enable_activity_classification: bool,
+    pub enable_ui_analysis: bool,
+    pub pattern_matching_threshold: f32,
+}
+
+impl Default for VisionConfig {
+    fn default() -> Self {
+        Self {
+            enable_app_detection: true,
+            enable_activity_classification: true,
+            enable_ui_analysis: true,
+            pattern_matching_threshold: 0.6,
+        }
+    }
 }

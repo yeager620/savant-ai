@@ -32,7 +32,7 @@ pub struct DetectedTask {
     pub detected_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TaskType {
     // Development tasks
     DebuggingError,
@@ -250,6 +250,7 @@ pub enum ExpertiseLevel {
     Expert,
 }
 
+#[derive(Debug)]
 pub struct RealTimeAnalyzer {
     frame_buffer: VecDeque<AnalysisFrame>,
     task_patterns: TaskPatternMatcher,
@@ -372,14 +373,14 @@ impl RealTimeAnalyzer {
         let mut tasks = Vec::new();
 
         // Analyze text content for task indicators
-        for word_data in &frame.ocr_result.word_level_data {
+        for word_data in &frame.ocr_result.words {
             if let Some(task) = self.task_patterns.match_word_pattern(&word_data.text, word_data) {
                 tasks.push(task);
             }
         }
 
         // Analyze paragraph-level content
-        for para in &frame.ocr_result.paragraph_level_data {
+        for para in &frame.ocr_result.paragraphs {
             if let Some(task) = self.task_patterns.match_paragraph_pattern(&para.text, para) {
                 tasks.push(task);
             }
@@ -401,15 +402,15 @@ impl RealTimeAnalyzer {
         let mut questions = Vec::new();
 
         // Scan all text for question patterns
-        for para in &frame.ocr_result.paragraph_level_data {
+        for para in &frame.ocr_result.paragraphs {
             if let Some(question) = self.question_detector.analyze_text(&para.text, para) {
                 questions.push(question);
             }
         }
 
         // Check for error messages that imply questions
-        for word_data in &frame.ocr_result.word_level_data {
-            if word_data.semantic_type == savant_ocr::TextType::ErrorMessage {
+        for word_data in &frame.ocr_result.words {
+            if word_data.text_type == Some(savant_ocr::TextType::ErrorMessage) {
                 if let Some(question) = self.question_detector.error_to_question(&word_data.text, word_data) {
                     questions.push(question);
                 }
@@ -479,6 +480,7 @@ impl RealTimeAnalyzer {
 }
 
 // Supporting analyzer structs
+#[derive(Debug)]
 struct TaskPatternMatcher {
     patterns: HashMap<TaskType, Vec<String>>,
 }
@@ -621,6 +623,7 @@ impl TaskPatternMatcher {
     }
 }
 
+#[derive(Debug)]
 struct QuestionDetector;
 
 impl QuestionDetector {
@@ -703,6 +706,7 @@ impl QuestionDetector {
     }
 }
 
+#[derive(Debug)]
 struct ContextTracker {
     current_context: Option<String>,
 }
@@ -720,6 +724,7 @@ impl ContextTracker {
     }
 }
 
+#[derive(Debug)]
 struct IntentAnalyzer;
 
 impl IntentAnalyzer {
@@ -737,6 +742,7 @@ impl IntentAnalyzer {
     }
 }
 
+#[derive(Debug)]
 struct AssistanceEngine;
 
 impl AssistanceEngine {

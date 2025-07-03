@@ -49,6 +49,7 @@ pub struct PatternMatch {
     pub bounding_box: Option<crate::BoundingBox>,
 }
 
+#[derive(Debug)]
 pub struct PatternMatcher {
     patterns: HashMap<String, VisualPattern>,
     app_patterns: AppPatternDatabase,
@@ -441,6 +442,7 @@ pub struct ElementBounds {
     pub element_type: String,
 }
 
+#[derive(Debug)]
 struct AppPatternDatabase {
     patterns: HashMap<String, AppPattern>,
 }
