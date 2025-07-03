@@ -60,7 +60,7 @@ pub struct DetectedCodingProblem {
     pub screen_region: ScreenRegion,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum CodingProblemType {
     CompilationError,
     RuntimeError,
@@ -108,7 +108,7 @@ pub enum CodingPlatform {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ProgrammingLanguage {
     Python,
     JavaScript,
@@ -174,7 +174,7 @@ pub struct ProblemPatternMatcher {
     pub confidence_boost: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum PatternType {
     ErrorPattern,
     ProblemStatement,
@@ -306,7 +306,7 @@ impl CodingProblemDetector {
         vision_analysis: &ScreenAnalysis,
     ) -> Result<Option<DetectedCodingProblem>> {
         let error_patterns = &self.pattern_matchers[0]; // Error pattern matcher
-        
+
         // Check for error keywords and patterns
         let mut error_confidence = 0.0;
         let mut error_details = None;
@@ -314,7 +314,7 @@ impl CodingProblemDetector {
 
         for paragraph in &ocr_result.paragraphs {
             let text = paragraph.text.to_lowercase();
-            
+
             // Check keywords
             for keyword in &error_patterns.keywords {
                 if text.contains(keyword) {
@@ -327,7 +327,7 @@ impl CodingProblemDetector {
                 if let Ok(pattern) = regex::Regex::new(pattern_str) {
                     if pattern.is_match(&paragraph.text) {
                         error_confidence += 0.3;
-                        
+
                         // Extract error details
                         if let Some(captures) = pattern.captures(&paragraph.text) {
                             if error_details.is_none() {
@@ -391,10 +391,10 @@ impl CodingProblemDetector {
         for matcher in &self.pattern_matchers[1..] {
             if matches!(matcher.pattern_type, PatternType::PlatformSpecific) {
                 let mut confidence = 0.0;
-                
+
                 for paragraph in &ocr_result.paragraphs {
                     let text = paragraph.text.to_lowercase();
-                    
+
                     // Check keywords
                     for keyword in &matcher.keywords {
                         if text.contains(keyword) {
@@ -483,7 +483,7 @@ impl CodingProblemDetector {
 
         for paragraph in &ocr_result.paragraphs {
             let text = paragraph.text.to_lowercase();
-            
+
             for pattern in &test_patterns {
                 if text.contains(pattern) {
                     test_confidence += 0.2;
@@ -524,8 +524,7 @@ impl CodingProblemDetector {
 
         for paragraph in &ocr_result.paragraphs {
             // Check if this looks like code
-            if paragraph.text_type == Some(TextType::CodeSnippet) || 
-               self.looks_like_code(&paragraph.text) {
+            if self.looks_like_code(&paragraph.text) {
                 visible_code.push_str(&paragraph.text);
                 visible_code.push('\n');
 
@@ -554,7 +553,7 @@ impl CodingProblemDetector {
         })
     }
 
-    fn detect_programming_language(&self, code: &str) -> ProgrammingLanguage {
+    pub fn detect_programming_language(&self, code: &str) -> ProgrammingLanguage {
         // Simple heuristics for language detection
         if code.contains("def ") && code.contains("import") {
             ProgrammingLanguage::Python
@@ -575,19 +574,22 @@ impl CodingProblemDetector {
 
     fn detect_platform(&self, vision_analysis: &ScreenAnalysis) -> Option<CodingPlatform> {
         // Check detected applications
-        for app in &vision_analysis.detected_applications {
-            match app.name.to_lowercase().as_str() {
-                name if name.contains("hackerrank") => return Some(CodingPlatform::HackerRank),
-                name if name.contains("leetcode") => return Some(CodingPlatform::LeetCode),
-                name if name.contains("codesignal") => return Some(CodingPlatform::CodeSignal),
-                name if name.contains("vscode") || name.contains("visual studio") => {
-                    return Some(CodingPlatform::LocalIDE)
-                },
-                name if name.contains("terminal") || name.contains("iterm") => {
-                    return Some(CodingPlatform::Terminal)
-                },
-                name if name.contains("jupyter") => return Some(CodingPlatform::JupyterNotebook),
-                _ => {}
+        for app in &vision_analysis.app_context.detected_applications {
+            if let Some(app_name) = &app.app_name {
+                let name = app_name.to_lowercase();
+                if name.contains("hackerrank") {
+                    return Some(CodingPlatform::HackerRank);
+                } else if name.contains("leetcode") {
+                    return Some(CodingPlatform::LeetCode);
+                } else if name.contains("codesignal") {
+                    return Some(CodingPlatform::CodeSignal);
+                } else if name.contains("vscode") || name.contains("visual studio") {
+                    return Some(CodingPlatform::LocalIDE);
+                } else if name.contains("terminal") || name.contains("iterm") {
+                    return Some(CodingPlatform::Terminal);
+                } else if name.contains("jupyter") {
+                    return Some(CodingPlatform::JupyterNotebook);
+                }
             }
         }
 
@@ -598,7 +600,7 @@ impl CodingProblemDetector {
         // Look for title patterns
         for paragraph in &ocr_result.paragraphs {
             // Check if this looks like a title (larger font, at top of screen)
-            if paragraph.bounding_box.y < 200 && paragraph.words.len() < 10 {
+            if paragraph.bounding_box.y < 200 && paragraph.text.split_whitespace().count() < 10 {
                 let text = paragraph.text.trim();
                 if !text.is_empty() && text.len() < 100 {
                     return text.to_string();
@@ -612,7 +614,7 @@ impl CodingProblemDetector {
     fn extract_starter_code(&self, ocr_result: &ComprehensiveOCRResult) -> Option<String> {
         // Look for code editor regions or starter code patterns
         for paragraph in &ocr_result.paragraphs {
-            if paragraph.text_type == Some(TextType::CodeSnippet) {
+            if self.looks_like_code(&paragraph.text) {
                 let text = paragraph.text.trim();
                 if text.contains("class Solution") || 
                    text.contains("def solution") ||
@@ -696,7 +698,7 @@ impl CodingProblemDetector {
     fn extract_line_numbers(&self, text: &str) -> Option<(usize, usize)> {
         // Look for line number patterns
         let line_num_regex = regex::Regex::new(r"^\s*(\d+)\s*[|:]").unwrap();
-        
+
         let mut min_line = usize::MAX;
         let mut max_line = 0;
 
@@ -759,10 +761,10 @@ impl CodingProblemDetector {
         let mut max_y = 0;
 
         for paragraph in &ocr_result.paragraphs {
-            min_x = min_x.min(paragraph.bounding_box.x);
-            min_y = min_y.min(paragraph.bounding_box.y);
-            max_x = max_x.max(paragraph.bounding_box.x + paragraph.bounding_box.width);
-            max_y = max_y.max(paragraph.bounding_box.y + paragraph.bounding_box.height);
+            min_x = min_x.min(paragraph.bounding_box.x as i32);
+            min_y = min_y.min(paragraph.bounding_box.y as i32);
+            max_x = max_x.max((paragraph.bounding_box.x + paragraph.bounding_box.width) as i32);
+            max_y = max_y.max((paragraph.bounding_box.y + paragraph.bounding_box.height) as i32);
         }
 
         ScreenRegion {
@@ -784,7 +786,7 @@ impl CodingProblemDetector {
         }
     }
 
-    fn update_context_buffer(&mut self, ocr_result: ComprehensiveOCRResult, vision_analysis: ScreenAnalysis) {
+    pub fn update_context_buffer(&mut self, ocr_result: ComprehensiveOCRResult, vision_analysis: ScreenAnalysis) {
         let context = ScreenContext {
             timestamp: Utc::now(),
             ocr_result,
@@ -809,6 +811,16 @@ struct ProblemElements {
 }
 
 // Re-export for convenience
+use std::fmt;
+
+impl fmt::Display for CodingPlatform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+
+
 pub use self::{
     CodingProblemType::*,
     CodingPlatform::*,

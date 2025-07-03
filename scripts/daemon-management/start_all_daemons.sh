@@ -15,9 +15,9 @@ fi
 
 # Check if required models are available
 echo "Checking Ollama models..."
-if ! ollama list | grep -q "devstral"; then
-    echo "Installing devstral model (this may take a few minutes)..."
-    ollama pull devstral
+if ! ollama list | grep -q "llama3.2"; then
+    echo "Installing llama3.2 model (this may take a few minutes)..."
+    ollama pull llama3.2
 fi
 
 # Start Ollama if not running

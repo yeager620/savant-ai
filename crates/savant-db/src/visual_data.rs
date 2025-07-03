@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
@@ -9,6 +9,44 @@ use uuid::Uuid;
 use serde_json::Value as VideoFrame;
 use serde_json::Value as CompressedFrame;
 use serde_json::Value as VideoAnalysisResult;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HighFrequencyFrame {
+    pub timestamp_ms: i64,
+    pub session_id: String,
+    pub frame_hash: String,
+    pub change_score: f64,
+    pub file_path: Option<String>,
+    pub screen_resolution: Option<String>,
+    pub active_app: Option<String>,
+    pub processing_flags: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextExtraction {
+    pub frame_id: String,
+    pub word_text: String,
+    pub confidence: f64,
+    pub bbox_x: i32,
+    pub bbox_y: i32,
+    pub bbox_width: i32,
+    pub bbox_height: i32,
+    pub font_size_estimate: Option<f64>,
+    pub text_type: Option<String>,
+    pub line_id: i32,
+    pub paragraph_id: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedTask {
+    pub frame_id: String,
+    pub task_type: String,
+    pub confidence: f64,
+    pub description: String,
+    pub evidence_text: String,
+    pub bounding_regions: Option<String>,
+    pub assistance_suggestions: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoQuery {
@@ -23,6 +61,24 @@ pub struct VideoQuery {
     pub has_opportunities: Option<bool>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+}
+
+impl Default for VideoQuery {
+    fn default() -> Self {
+        Self {
+            session_id: None,
+            start_time: None,
+            end_time: None,
+            active_application: None,
+            text_contains: None,
+            activity_type: None,
+            min_confidence: None,
+            has_code: None,
+            has_opportunities: None,
+            limit: None,
+            offset: None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,6 +121,7 @@ pub struct CodeAnalysis {
     pub last_detected: DateTime<Utc>,
 }
 
+#[derive(Debug)]
 pub struct VisualDataManager {
     pool: SqlitePool,
 }
@@ -73,7 +130,7 @@ impl VisualDataManager {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
-    
+
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
@@ -125,7 +182,7 @@ impl VisualDataManager {
         let frame_id = uuid::Uuid::new_v4().to_string();
         let session_id = "test_session_123";
         let now = chrono::Utc::now();
-        
+
         sqlx::query(
             r#"INSERT INTO video_frames 
                (id, session_id, timestamp, file_path, resolution_width, resolution_height, 
@@ -157,7 +214,7 @@ impl VisualDataManager {
         self.store_frame(&mock_frame).await?;
 
         let frame_id = uuid::Uuid::new_v4().to_string();
-        
+
         // Update with compression information
         sqlx::query(
             r#"UPDATE video_frames 
@@ -177,11 +234,86 @@ impl VisualDataManager {
         Ok(())
     }
 
+    /// Store text extraction
+    pub async fn store_text_extraction(&self, extraction: &TextExtraction) -> Result<()> {
+        let id = Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"INSERT INTO hf_text_extractions 
+               (id, frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, 
+                font_size_estimate, text_type, line_id, paragraph_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+        )
+        .bind(&id)
+        .bind(&extraction.frame_id)
+        .bind(&extraction.word_text)
+        .bind(extraction.confidence)
+        .bind(extraction.bbox_x)
+        .bind(extraction.bbox_y)
+        .bind(extraction.bbox_width)
+        .bind(extraction.bbox_height)
+        .bind(extraction.font_size_estimate)
+        .bind(&extraction.text_type)
+        .bind(extraction.line_id)
+        .bind(extraction.paragraph_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get text in a specific region
+    pub async fn get_text_in_region(
+        &self,
+        start_time: i64,
+        end_time: i64,
+        x_min: i32,
+        y_min: i32,
+        x_max: i32,
+        y_max: i32
+    ) -> Result<Vec<TextExtraction>> {
+        let rows = sqlx::query(
+            r#"SELECT * FROM hf_text_extractions t
+               JOIN hf_video_frames f ON t.frame_id = f.frame_hash
+               WHERE f.timestamp_ms BETWEEN ? AND ?
+               AND t.bbox_x >= ? AND t.bbox_y >= ?
+               AND (t.bbox_x + t.bbox_width) <= ? AND (t.bbox_y + t.bbox_height) <= ?
+               ORDER BY f.timestamp_ms, t.bbox_y, t.bbox_x"#
+        )
+        .bind(start_time)
+        .bind(end_time)
+        .bind(x_min)
+        .bind(y_min)
+        .bind(x_max)
+        .bind(y_max)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut extractions = Vec::new();
+        for row in rows {
+            extractions.push(TextExtraction {
+                frame_id: row.get("frame_id"),
+                word_text: row.get("word_text"),
+                confidence: row.get("confidence"),
+                bbox_x: row.get("bbox_x"),
+                bbox_y: row.get("bbox_y"),
+                bbox_width: row.get("bbox_width"),
+                bbox_height: row.get("bbox_height"),
+                font_size_estimate: row.get("font_size_estimate"),
+                text_type: row.get("text_type"),
+                line_id: row.get("line_id"),
+                paragraph_id: row.get("paragraph_id"),
+            });
+        }
+
+        Ok(extractions)
+    }
+
     /// Store OCR content
     pub async fn store_ocr_content(
         &self,
         frame_id: &str,
-        ocr_result: &serde_json::Value, // Placeholder for OCRResult
+        _ocr_result: &serde_json::Value, // Placeholder for OCRResult
     ) -> Result<()> {
         // For testing purposes, use mock data
         let id = Uuid::new_v4().to_string();
@@ -278,7 +410,7 @@ impl VisualDataManager {
         self.store_vision_analysis(frame_id, &mock_vision).await?;
 
         self.store_app_context(frame_id, "ide", r#"{"language": "python"}"#).await?;
-        
+
         let mock_snippet = serde_json::Value::Null;
         self.store_code_snippet(frame_id, &mock_snippet).await?;
 
@@ -306,7 +438,7 @@ impl VisualDataManager {
     }
 
     /// Store code snippet
-    async fn store_code_snippet(&self, frame_id: &str, _snippet: &serde_json::Value) -> Result<()> {
+    pub async fn store_code_snippet(&self, frame_id: &str, _snippet: &serde_json::Value) -> Result<()> {
         let id = Uuid::new_v4().to_string();
 
         sqlx::query(
@@ -327,7 +459,7 @@ impl VisualDataManager {
     }
 
     /// Store interaction opportunity
-    async fn store_interaction_opportunity(
+    pub async fn store_interaction_opportunity(
         &self,
         frame_id: &str,
         _opportunity: &serde_json::Value, // Placeholder for InteractionOpportunity
@@ -474,6 +606,40 @@ impl VisualDataManager {
         })
     }
 
+    /// Get activity summary for a time range
+    pub async fn get_activity_summary(
+        &self,
+        start_time: i64,
+        end_time: i64
+    ) -> Result<Vec<ApplicationUsage>> {
+        let rows = sqlx::query(
+            r#"SELECT active_app as app_name, COUNT(*) as frame_count, 
+               MIN(timestamp_ms) as first_seen, MAX(timestamp_ms) as last_seen
+               FROM hf_video_frames
+               WHERE timestamp_ms BETWEEN ? AND ?
+               AND active_app IS NOT NULL
+               GROUP BY active_app
+               ORDER BY frame_count DESC"#
+        )
+        .bind(start_time)
+        .bind(end_time)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut app_usage = Vec::new();
+        for row in rows {
+            app_usage.push(ApplicationUsage {
+                application: row.get("app_name"),
+                frame_count: row.get("frame_count"),
+                first_seen: chrono::Utc.timestamp_millis_opt(row.get::<i64, _>("first_seen")).unwrap(),
+                last_seen: chrono::Utc.timestamp_millis_opt(row.get::<i64, _>("last_seen")).unwrap(),
+                avg_productivity: 0.5, // Default value
+            });
+        }
+
+        Ok(app_usage)
+    }
+
     /// Get application usage statistics
     pub async fn get_application_usage(&self, limit: Option<i64>) -> Result<Vec<ApplicationUsage>> {
         let sql = if let Some(limit) = limit {
@@ -523,10 +689,50 @@ impl VisualDataManager {
         Ok(analysis)
     }
 
+    /// Search text content with time range
+    pub async fn search_text_content(
+        &self,
+        query: &str,
+        start_time: i64,
+        end_time: i64
+    ) -> Result<Vec<TextExtraction>> {
+        let rows = sqlx::query(
+            r#"SELECT t.* FROM hf_text_extractions t
+               JOIN hf_video_frames f ON t.frame_id = f.frame_hash
+               WHERE f.timestamp_ms BETWEEN ? AND ?
+               AND t.word_text LIKE ?
+               ORDER BY f.timestamp_ms"#
+        )
+        .bind(start_time)
+        .bind(end_time)
+        .bind(format!("%{}%", query))
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut extractions = Vec::new();
+        for row in rows {
+            extractions.push(TextExtraction {
+                frame_id: row.get("frame_id"),
+                word_text: row.get("word_text"),
+                confidence: row.get("confidence"),
+                bbox_x: row.get("bbox_x"),
+                bbox_y: row.get("bbox_y"),
+                bbox_width: row.get("bbox_width"),
+                bbox_height: row.get("bbox_height"),
+                font_size_estimate: row.get("font_size_estimate"),
+                text_type: row.get("text_type"),
+                line_id: row.get("line_id"),
+                paragraph_id: row.get("paragraph_id"),
+            });
+        }
+
+        Ok(extractions)
+    }
+
     /// Search OCR content using full-text search
     pub async fn search_text(&self, query: &str, limit: Option<i64>) -> Result<Vec<serde_json::Value>> {
         let limit_clause = limit.map_or_else(|| "".to_string(), |l| format!(" LIMIT {}", l));
-        
+
         let sql = format!(
             r#"SELECT vf.id, vf.timestamp, vf.active_application, voc.text_content, 
                       voc.text_type, voc.confidence
@@ -556,6 +762,102 @@ impl VisualDataManager {
         }
 
         Ok(results)
+    }
+
+    /// Store detected task
+    pub async fn store_detected_task(&self, task: &DetectedTask) -> Result<()> {
+        let id = Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"INSERT INTO detected_tasks 
+               (id, frame_id, task_type, confidence, description, evidence_text, 
+                bounding_regions, assistance_suggestions, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"#
+        )
+        .bind(&id)
+        .bind(&task.frame_id)
+        .bind(&task.task_type)
+        .bind(task.confidence)
+        .bind(&task.description)
+        .bind(&task.evidence_text)
+        .bind(&task.bounding_regions)
+        .bind(&task.assistance_suggestions)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get recent tasks
+    pub async fn get_recent_tasks(
+        &self,
+        start_time: i64,
+        end_time: i64,
+        limit: i64
+    ) -> Result<Vec<DetectedTask>> {
+        let rows = sqlx::query(
+            r#"SELECT t.* FROM detected_tasks t
+               JOIN hf_video_frames f ON t.frame_id = f.frame_hash
+               WHERE f.timestamp_ms BETWEEN ? AND ?
+               ORDER BY f.timestamp_ms DESC
+               LIMIT ?"#
+        )
+        .bind(start_time)
+        .bind(end_time)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut tasks = Vec::new();
+        for row in rows {
+            tasks.push(DetectedTask {
+                frame_id: row.get("frame_id"),
+                task_type: row.get("task_type"),
+                confidence: row.get("confidence"),
+                description: row.get("description"),
+                evidence_text: row.get("evidence_text"),
+                bounding_regions: row.get("bounding_regions"),
+                assistance_suggestions: row.get("assistance_suggestions"),
+            });
+        }
+
+        Ok(tasks)
+    }
+
+    /// Get frames in range
+    pub async fn get_frames_in_range(
+        &self,
+        start_time: i64,
+        end_time: i64,
+        limit: i64
+    ) -> Result<Vec<serde_json::Value>> {
+        let rows = sqlx::query(
+            r#"SELECT * FROM hf_video_frames
+               WHERE timestamp_ms BETWEEN ? AND ?
+               ORDER BY timestamp_ms DESC
+               LIMIT ?"#
+        )
+        .bind(start_time)
+        .bind(end_time)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut frames = Vec::new();
+        for row in rows {
+            frames.push(serde_json::json!({
+                "frame_hash": row.get::<String, _>("frame_hash"),
+                "session_id": row.get::<String, _>("session_id"),
+                "timestamp_ms": row.get::<i64, _>("timestamp_ms"),
+                "change_score": row.get::<f64, _>("change_score"),
+                "file_path": row.get::<Option<String>, _>("file_path"),
+                "screen_resolution": row.get::<Option<String>, _>("screen_resolution"),
+                "active_app": row.get::<Option<String>, _>("active_app"),
+                "processing_flags": row.get::<i32, _>("processing_flags")
+            }));
+        }
+
+        Ok(frames)
     }
 
     /// Get interaction opportunities

@@ -33,8 +33,8 @@ impl Default for SolutionConfig {
         Self {
             enable_auto_generation: true,
             preferred_models: vec![
+                "llama3.2:latest".to_string(),
                 "devstral:latest".to_string(),
-                "llama3.2:3b".to_string(),
                 "claude-3-opus".to_string(),
             ],
             max_tokens: 2048,
@@ -180,7 +180,7 @@ impl SolutionGenerator {
         };
 
         let response = self.llm_provider.complete(request).await?;
-        
+
         // Parse the response
         let solution = self.parse_solution_response(problem, &response.content, model)?;
 
@@ -196,7 +196,7 @@ impl SolutionGenerator {
         }
     }
 
-    fn generate_prompt(&self, problem: &DetectedCodingProblem) -> Result<String> {
+    pub fn generate_prompt(&self, problem: &DetectedCodingProblem) -> Result<String> {
         let mut prompt = String::new();
 
         match problem.problem_type {
@@ -294,30 +294,30 @@ impl SolutionGenerator {
         // Add specific requirements
         prompt.push_str("\nRequirements:\n");
         prompt.push_str(&format!("1. Provide a complete, working solution in {}\n", problem.language.to_string()));
-        
+
         if self.config.include_explanations {
             prompt.push_str("2. Include a clear explanation of your approach\n");
         }
-        
+
         if self.config.include_time_complexity {
             prompt.push_str("3. Analyze the time complexity\n");
         }
-        
+
         if self.config.include_space_complexity {
             prompt.push_str("4. Analyze the space complexity\n");
         }
 
         prompt.push_str("\nFormat your response as follows:\n");
         prompt.push_str("```solution\n[Your code here]\n```\n\n");
-        
+
         if self.config.include_explanations {
             prompt.push_str("```explanation\n[Your explanation here]\n```\n\n");
         }
-        
+
         if self.config.include_time_complexity {
             prompt.push_str("```time_complexity\n[Time complexity analysis]\n```\n\n");
         }
-        
+
         if self.config.include_space_complexity {
             prompt.push_str("```space_complexity\n[Space complexity analysis]\n```\n");
         }
@@ -337,7 +337,7 @@ impl SolutionGenerator {
         )
     }
 
-    fn parse_solution_response(
+    pub fn parse_solution_response(
         &self,
         problem: &DetectedCodingProblem,
         response: &str,
@@ -413,14 +413,14 @@ impl SolutionGenerator {
         })
     }
 
-    fn calculate_confidence_score(
+    pub fn calculate_confidence_score(
         &self,
         solution_code: &str,
         explanation: &Option<String>,
         time_complexity: &Option<String>,
         space_complexity: &Option<String>,
     ) -> f32 {
-        let mut score = 0.0;
+        let mut score: f32 = 0.0;
 
         // Base score for having solution code
         if !solution_code.is_empty() {
@@ -479,7 +479,7 @@ impl SolutionGenerator {
         problem.problem_type.to_string().hash(&mut hasher);
         problem.description.hash(&mut hasher);
         problem.language.to_string().hash(&mut hasher);
-        
+
         if let Some(starter_code) = &problem.starter_code {
             starter_code.hash(&mut hasher);
         }

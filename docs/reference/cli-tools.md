@@ -187,7 +187,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | savant-mcp-server --test
 ```bash
 # OCR → LLM analysis
 cargo run --package savant-ocr -- extract --input screenshot.png --format text --fast | \
-  cargo run --package savant-llm -- --model devstral | jq -r '.content'
+  cargo run --package savant-llm -- --model llama3.2 | jq -r '.content'
 
 # Vision analysis with filtering
 cargo run --package savant-vision -- analyze --input screenshot.png --detect-apps --format json | \

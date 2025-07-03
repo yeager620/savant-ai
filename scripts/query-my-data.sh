@@ -221,7 +221,7 @@ ${BLUE}DATA LOCATION:${NC}
 
 ${BLUE}REQUIREMENTS:${NC}
   - Ollama running (ollama serve)
-  - devstral model (ollama pull devstral)
+  - llama3.2 model (ollama pull llama3.2)
 EOF
 }
 

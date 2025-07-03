@@ -326,7 +326,7 @@ async fn clear_chat_history() -> Result<(), String> {
 
 async fn send_to_ollama_streaming(prompt: String, messages: Vec<ChatMessage>) -> Result<(), String> {
     let args = OllamaArgs {
-        model: "devstral".to_string(),
+        model: "llama3.2".to_string(),
         prompt,
         messages,
     };

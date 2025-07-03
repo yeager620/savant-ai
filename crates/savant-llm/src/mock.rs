@@ -35,19 +35,19 @@ impl MockLLMProvider {
 
         // Look for keywords in prompt
         let prompt_lower = prompt.to_lowercase();
-        
+
         // First try exact model match
         if let Some(response) = self.responses.get(model) {
             return Ok(response.clone());
         }
-        
+
         // Then try keyword matching
         for (keyword, response) in &self.responses {
             if prompt_lower.contains(keyword) {
                 return Ok(response.clone());
             }
         }
-        
+
         // Default response
         Ok("```solution\n// Mock solution\npass\n```".to_string())
     }
@@ -57,7 +57,7 @@ impl MockLLMProvider {
 impl LLMProviderTrait for MockLLMProvider {
     async fn complete(&self, request: LLMRequest) -> Result<LLMResponse> {
         let content = self.find_response(&request.prompt, &request.model)?;
-        
+
         Ok(LLMResponse {
             model: request.model,
             content,
@@ -72,13 +72,13 @@ impl LLMProviderTrait for MockLLMProvider {
         callback: Box<dyn Fn(String) + Send>,
     ) -> Result<LLMResponse> {
         let content = self.find_response(&request.prompt, &request.model)?;
-        
+
         // Simulate streaming
         for chunk in content.split(' ') {
             callback(format!("{} ", chunk));
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
-        
+
         Ok(LLMResponse {
             model: request.model,
             content,

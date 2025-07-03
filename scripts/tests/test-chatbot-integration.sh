@@ -210,7 +210,7 @@ query_mcp() {
     echo -e "\n${YELLOW}$description${NC}"
     echo "Request: $query_json" | jq '.'
     echo -e "${BLUE}Response:${NC}"
-    echo "$query_json" | $MCP_SERVER --db-path "$TEST_DB_PATH" --llm-provider ollama --llm-model devstral 2>/dev/null | jq -r '.result.content // .result.response // .result // .error.message // .'
+    echo "$query_json" | $MCP_SERVER --db-path "$TEST_DB_PATH" --llm-provider ollama --llm-model llama3.2 2>/dev/null | jq -r '.result.content // .result.response // .result // .error.message // .'
     echo -e "${GREEN}✅ Query completed${NC}"
 }
 

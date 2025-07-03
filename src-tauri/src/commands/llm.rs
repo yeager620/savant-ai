@@ -806,7 +806,7 @@ pub async fn query_ollama_simple(model: String, prompt: String) -> Result<String
         .map_err(|e| format!("Failed to connect to Ollama: {}. Make sure Ollama is running.", e))?;
     
     if !response.status().is_success() {
-        return Err(format!("Ollama returned error: {}. Try running 'ollama pull devstral' first.", response.status()));
+        return Err(format!("Ollama returned error: {}. Try running 'ollama pull llama3.2' first.", response.status()));
     }
     
     let ollama_response: OllamaResponse = response.json().await

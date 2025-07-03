@@ -55,6 +55,23 @@ pub struct FrameMetadata {
     pub visual_context: Option<savant_vision::VisualContext>,
 }
 
+impl Default for FrameMetadata {
+    fn default() -> Self {
+        Self {
+            session_id: String::from("default-session"),
+            display_id: None,
+            active_application: None,
+            window_title: None,
+            change_detected: false,
+            ocr_text: None,
+            enhanced_analysis: None,
+            detected_applications: Vec::new(),
+            activity_classification: None,
+            visual_context: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoSession {
     pub id: String,

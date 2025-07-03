@@ -26,7 +26,7 @@ echo "📋 Database statistics:"
 
 echo ""
 echo "🤖 Testing AI query (this may take a moment)..."
-RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_conversations","arguments":{"query":"What topics about machine learning were discussed?","session_id":"demo"}}}' | timeout 20s ./target/release/savant-mcp-server --database data/databases/dev/personal-audio.db --llm-provider ollama --llm-model devstral 2>/dev/null | head -1)
+RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_conversations","arguments":{"query":"What topics about machine learning were discussed?","session_id":"demo"}}}' | timeout 20s ./target/release/savant-mcp-server --database data/databases/dev/personal-audio.db --llm-provider ollama --llm-model llama3.2 2>/dev/null | head -1)
 
 if [ -n "$RESPONSE" ]; then
     echo "✅ AI Response received:"

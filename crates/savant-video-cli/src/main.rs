@@ -204,11 +204,20 @@ async fn start_capture(
         frame_count: 0,
         total_size_bytes: 0,
         config: CaptureConfig {
-            interval_seconds,
+            interval_milliseconds: interval_seconds * 1000, // Convert seconds to milliseconds
             enabled_hours: None,
             quality: savant_video::config::ImageQuality::Medium,
             notify_user: true,
             stealth_mode,
+            continuous_mode: true,
+            auto_compress: true,
+            max_resolution: Some((1920, 1080)),
+            enable_processing: true,
+            processing_interval: 1,
+            change_detection_threshold: 0.05,
+            enable_full_text_extraction: true,
+            enable_real_time_analysis: true,
+            buffer_size: 10,
         },
     };
 
@@ -383,10 +392,10 @@ async fn configure_privacy(
 async fn cleanup_old_captures(days: u32) -> Result<()> {
     let storage = StorageManager::new(StorageSettings::default());
     storage.initialize().await?;
-    
+
     println!("Cleaning up captures older than {} days...", days);
     storage.cleanup_old_files().await?;
-    
+
     let usage = storage.get_storage_usage().await?;
     println!("Current storage usage: {} MB", usage / 1024 / 1024);
     Ok(())

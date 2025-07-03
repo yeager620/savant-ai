@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use image::ImageReader;
-use savant_vision::{VisionAnalyzer, ScreenAnalysis};
+use savant_vision::{VisionAnalyzer, ScreenAnalysis, VisionConfig};
 use serde_json;
 use std::path::PathBuf;
 use tokio;
@@ -110,13 +110,8 @@ async fn analyze_image(
     let image = ImageReader::open(&input)?.decode()?;
     
     // Create vision analyzer
-    let analyzer = VisionAnalyzer::new()?;
-    
-    // Note: detect_apps, classify_activity, detect_ui would be used here in full implementation
-    let _ = (detect_apps, classify_activity, detect_ui);
-    
-    // Perform analysis
-    let analysis = analyzer.analyze_screenshot(&image).await?;
+    let analyzer = VisionAnalyzer::new(VisionConfig::default())?;
+    let analysis = analyzer.analyze_screen(&image).await?;
     
     // Output results based on format
     match format.as_str() {
@@ -244,10 +239,10 @@ async fn test_vision_analysis(input: Option<PathBuf>) -> Result<()> {
         image::DynamicImage::ImageRgb8(img)
     };
     
-    let analyzer = VisionAnalyzer::new()?;
+    let analyzer = VisionAnalyzer::new(VisionConfig::default())?;
     
     let start_time = std::time::Instant::now();
-    let analysis = analyzer.analyze_screenshot(&test_image).await?;
+    let analysis = analyzer.analyze_screen(&test_image).await?;
     let processing_time = start_time.elapsed();
     
     println!("✓ Vision analysis completed in {:?}", processing_time);
@@ -270,7 +265,7 @@ async fn benchmark_analysis(input: PathBuf, iterations: u32) -> Result<()> {
     println!("Benchmarking vision analysis performance...");
     
     let image = ImageReader::open(&input)?.decode()?;
-    let analyzer = VisionAnalyzer::new()?;
+    let analyzer = VisionAnalyzer::new(VisionConfig::default())?;
     
     let mut total_time = std::time::Duration::ZERO;
     let mut successful_runs = 0;
@@ -279,7 +274,7 @@ async fn benchmark_analysis(input: PathBuf, iterations: u32) -> Result<()> {
         print!("Iteration {}/{}... ", i, iterations);
         
         let start_time = std::time::Instant::now();
-        match analyzer.analyze_screenshot(&image).await {
+        match analyzer.analyze_screen(&image).await {
             Ok(_) => {
                 let elapsed = start_time.elapsed();
                 total_time += elapsed;

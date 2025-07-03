@@ -8,17 +8,17 @@ use chrono::Utc;
 async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.db");
-    
+
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
         .connect(&format!("sqlite:{}", db_path.display()))
         .await?;
-    
+
     // Run migrations
-    sqlx::migrate!("../../savant-db/migrations")
+    sqlx::migrate!("../savant-db/migrations")
         .run(&pool)
         .await?;
-    
+
     // Insert test data
     sqlx::query!(
         r#"
@@ -26,7 +26,7 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
         VALUES ('conv-1', datetime('now', '-1 hour'), 'Test Conversation')
         "#
     ).execute(&pool).await?;
-    
+
     sqlx::query!(
         r#"
         INSERT INTO transcripts (conversation_id, timestamp, speaker_id, text, confidence)
@@ -37,7 +37,7 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
             ('conv-1', datetime('now', '-14 minutes'), 'assistant', 'Here is a Python implementation of a binary search tree...', 0.97)
         "#
     ).execute(&pool).await?;
-    
+
     // Add visual data
     sqlx::query!(
         r#"
@@ -51,7 +51,7 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
         Utc::now().timestamp_millis() - 900000,  // 15 minutes ago
         Utc::now().timestamp_millis() - 300000,  // 5 minutes ago
     ).execute(&pool).await?;
-    
+
     sqlx::query!(
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
@@ -62,7 +62,7 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
             ('frame-3', 'python', 0.95, 200, 300, 60, 18, 'CommandLine')
         "#
     ).execute(&pool).await?;
-    
+
     sqlx::query!(
         r#"
         INSERT INTO hf_detected_tasks (frame_id, task_type, confidence, description, evidence_text)
@@ -70,27 +70,28 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
             ('frame-1', 'CodingProblem', 0.92, 'Implementing binary search tree', '{"language": "Python", "complexity": "Medium"}')
         "#
     ).execute(&pool).await?;
-    
-    let server = MCPServer::new(pool).await?;
+
+    let database = Arc::new(savant_db::TranscriptDatabase::new(pool));
+    let server = MCPServer::new(database, None).await?;
     Ok((server, temp_dir))
 }
 
 #[tokio::test]
 async fn test_list_tools() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "tools/list".to_string(),
         params: None,
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolsList { tools, .. } = response {
         assert!(!tools.is_empty());
-        
+
         // Check that key tools are present
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(tool_names.contains(&"query_conversations"));
@@ -105,7 +106,7 @@ async fn test_list_tools() {
 #[tokio::test]
 async fn test_query_conversations_natural_language() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     // Test various natural language queries
     let queries = vec![
         ("Show me conversations about binary search trees", true),
@@ -114,7 +115,7 @@ async fn test_query_conversations_natural_language() {
         ("Show conversations from the last hour", true),
         ("What did the user ask about?", true),
     ];
-    
+
     for (query, should_have_results) in queries {
         let request = MCPRequest {
             jsonrpc: "2.0".to_string(),
@@ -128,17 +129,17 @@ async fn test_query_conversations_natural_language() {
                 }
             })),
         };
-        
+
         let response = server.handle_request(request).await.unwrap();
-        
+
         if let MCPResponse::ToolResult { content, .. } = response {
             let results: Value = serde_json::from_str(&content[0].text).unwrap();
             let conversations = results["conversations"].as_array().unwrap();
-            
+
             if should_have_results {
                 assert!(!conversations.is_empty(), "Query '{}' should return results", query);
             }
-            
+
             println!("Query '{}' returned {} results", query, conversations.len());
         } else {
             panic!("Expected ToolResult response");
@@ -149,7 +150,7 @@ async fn test_query_conversations_natural_language() {
 #[tokio::test]
 async fn test_search_semantic() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -163,16 +164,16 @@ async fn test_search_semantic() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
         assert!(results["results"].is_array());
-        
+
         let search_results = results["results"].as_array().unwrap();
         assert!(!search_results.is_empty());
-        
+
         // Check that results contain relevant content
         let has_binary_search = search_results.iter().any(|r| 
             r["content"].as_str().unwrap_or("").contains("binary search")
@@ -186,7 +187,7 @@ async fn test_search_semantic() {
 #[tokio::test]
 async fn test_get_current_activity() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -198,16 +199,16 @@ async fn test_get_current_activity() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
-        
+
         assert!(results["current_app"].is_string());
         assert!(results["recent_activities"].is_array());
         assert!(results["detected_tasks"].is_array());
-        
+
         // Should detect our test task
         let tasks = results["detected_tasks"].as_array().unwrap();
         assert!(!tasks.is_empty());
@@ -220,7 +221,7 @@ async fn test_get_current_activity() {
 #[tokio::test]
 async fn test_query_multimodal_context() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -233,18 +234,18 @@ async fn test_query_multimodal_context() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
-        
+
         assert!(results["contexts"].is_array());
         let contexts = results["contexts"].as_array().unwrap();
-        
+
         // Should find correlation between transcript and visual data
         assert!(!contexts.is_empty());
-        
+
         // Check that context includes both audio and visual events
         let first_context = &contexts[0];
         assert!(first_context["audio_events"].is_array());
@@ -258,7 +259,7 @@ async fn test_query_multimodal_context() {
 #[tokio::test]
 async fn test_find_assistance_opportunities() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -271,18 +272,18 @@ async fn test_find_assistance_opportunities() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
-        
+
         assert!(results["opportunities"].is_array());
         let opportunities = results["opportunities"].as_array().unwrap();
-        
+
         // Should detect the coding problem as an assistance opportunity
         assert!(!opportunities.is_empty());
-        
+
         let first_opp = &opportunities[0];
         assert!(first_opp["type"].is_string());
         assert!(first_opp["context"].is_object());
@@ -295,7 +296,7 @@ async fn test_find_assistance_opportunities() {
 #[tokio::test]
 async fn test_correlate_audio_video_events() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -309,12 +310,12 @@ async fn test_correlate_audio_video_events() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
-        
+
         assert!(results["correlations"].is_array());
         assert!(results["summary"]["total_audio_events"].is_number());
         assert!(results["summary"]["total_video_events"].is_number());
@@ -327,19 +328,19 @@ async fn test_correlate_audio_video_events() {
 #[tokio::test]
 async fn test_list_resources() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "resources/list".to_string(),
         params: None,
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ResourcesList { resources, .. } = response {
         assert!(!resources.is_empty());
-        
+
         // Check key resources
         let resource_uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(resource_uris.contains(&"conversations://list"));
@@ -353,10 +354,10 @@ async fn test_list_resources() {
 #[tokio::test]
 async fn test_complex_multimodal_query() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     // Add more complex test data
     let pool = &server.db_pool;
-    
+
     // Add a compilation error scenario
     sqlx::query!(
         r#"
@@ -365,7 +366,7 @@ async fn test_complex_multimodal_query() {
         "#,
         Utc::now().timestamp_millis() - 120000, // 2 minutes ago
     ).execute(pool).await.unwrap();
-    
+
     sqlx::query!(
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
@@ -375,7 +376,7 @@ async fn test_complex_multimodal_query() {
             ('error-frame', 'indent', 0.97, 280, 400, 60, 20, 'ErrorMessage')
         "#
     ).execute(pool).await.unwrap();
-    
+
     // Query for error context
     let request = MCPRequest {
         jsonrpc: "2.0".to_string(),
@@ -389,20 +390,20 @@ async fn test_complex_multimodal_query() {
             }
         })),
     };
-    
+
     let response = server.handle_request(request).await.unwrap();
-    
+
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
         let contexts = results["contexts"].as_array().unwrap();
-        
+
         // Should find the error context
         let error_context = contexts.iter().find(|c| 
             c["visual_events"].as_array().unwrap().iter().any(|e|
                 e["text_content"].as_str().unwrap_or("").contains("SyntaxError")
             )
         );
-        
+
         assert!(error_context.is_some(), "Should find syntax error context");
     } else {
         panic!("Expected ToolResult response");
@@ -412,10 +413,10 @@ async fn test_complex_multimodal_query() {
 #[tokio::test]
 async fn test_performance_with_concurrent_requests() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
-    
+
     // Spawn multiple concurrent requests
     let mut handles = vec![];
-    
+
     for i in 0..10 {
         let server_clone = server.clone();
         let handle = tokio::spawn(async move {
@@ -431,17 +432,17 @@ async fn test_performance_with_concurrent_requests() {
                     }
                 })),
             };
-            
+
             let start = std::time::Instant::now();
             let response = server_clone.handle_request(request).await.unwrap();
             let elapsed = start.elapsed();
-            
+
             (i, elapsed, response)
         });
-        
+
         handles.push(handle);
     }
-    
+
     // Wait for all requests to complete
     let mut total_time = std::time::Duration::from_secs(0);
     for handle in handles {
@@ -449,10 +450,10 @@ async fn test_performance_with_concurrent_requests() {
         println!("Request {} completed in {:?}", id, elapsed);
         total_time += elapsed;
     }
-    
+
     let avg_time = total_time / 10;
     println!("Average response time: {:?}", avg_time);
-    
+
     // Should handle concurrent requests efficiently
     assert!(avg_time.as_millis() < 100);
 }

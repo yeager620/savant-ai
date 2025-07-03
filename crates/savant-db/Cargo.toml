@@ -7,6 +7,7 @@ description = "Database management for Savant AI transcription data"
 [dependencies]
 savant-core = { path = "../savant-core" }
 savant-stt = { path = "../savant-stt" }
+savant-ocr = { path = "../savant-ocr" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -24,6 +25,7 @@ regex = "1.10"
 sqlparser = "0.42"
 # Error handling
 thiserror = "1.0"
+tempfile = "3.2.0"
 # Async trait support  
 async-trait = "0.1"
 # HTTP client for LLM APIs

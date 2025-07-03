@@ -177,7 +177,7 @@ impl SemanticSearchEngine {
     }
 
     /// Get full search result with context
-    async fn get_search_result(
+    async fn _get_search_result(
         &self,
         segment_id: &str,
         similarity_score: f32,
@@ -279,7 +279,7 @@ impl SemanticSearchEngine {
     /// Simple topic extraction using keyword frequency
     fn simple_topic_extraction(&self, text: &str) -> Vec<String> {
         let mut topics = Vec::new();
-        
+
         // Common topic indicators
         let topic_keywords = [
             ("work", vec!["work", "job", "project", "meeting", "deadline", "task"]),
@@ -293,13 +293,13 @@ impl SemanticSearchEngine {
         ];
 
         let text_lower = text.to_lowercase();
-        
+
         for (topic_name, keywords) in topic_keywords.iter() {
             let mut count = 0;
             for keyword in keywords {
                 count += text_lower.matches(keyword).count();
             }
-            
+
             // If topic has significant presence (>= 3 mentions), include it
             if count >= 3 {
                 topics.push(topic_name.to_string());
@@ -496,11 +496,11 @@ impl SemanticSearchEngine {
 }
 
 /// Calculate cosine similarity between two vectors
-fn cosine_similarity(a: &Array1<f32>, b: &Array1<f32>) -> f32 {
+fn _cosine_similarity(a: &Array1<f32>, b: &Array1<f32>) -> f32 {
     let dot_product = a.dot(b);
     let norm_a = a.mapv(|x| x * x).sum().sqrt();
     let norm_b = b.mapv(|x| x * x).sum().sqrt();
-    
+
     if norm_a == 0.0 || norm_b == 0.0 {
         0.0
     } else {

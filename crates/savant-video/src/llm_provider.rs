@@ -15,7 +15,7 @@ pub struct LLMRequest {
 impl Default for LLMRequest {
     fn default() -> Self {
         Self {
-            model: "devstral:latest".to_string(),
+            model: "llama3.2:latest".to_string(),
             prompt: String::new(),
             system_prompt: None,
             max_tokens: Some(2048),

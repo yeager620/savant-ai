@@ -117,7 +117,7 @@ Disk: 45% used
 brew install ollama tesseract imagemagick
 
 # Pull AI model
-ollama pull devstral
+ollama pull llama3.2
 ```
 
 ### Permissions Required

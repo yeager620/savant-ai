@@ -14,7 +14,7 @@ use crate::{
 use savant_ocr::ComprehensiveOCRProcessor;
 use savant_vision::VisionAnalyzer;
 use crate::llm_provider::LLMProvider;
-use savant_db::visual_data::VisualDataManager;
+use sqlx::SqlitePool;
 
 #[derive(Debug)]
 pub struct IntegratedProcessor {
@@ -25,7 +25,7 @@ pub struct IntegratedProcessor {
     pub real_time_analyzer: RealTimeAnalyzer,
     pub problem_detector: CodingProblemDetector,
     pub solution_generator: SolutionGenerator,
-    pub visual_db: VisualDataManager,
+    pub db_pool: SqlitePool,
     pub event_tx: mpsc::UnboundedSender<ProcessingEvent>,
 }
 
@@ -104,7 +104,7 @@ impl IntegratedProcessor {
                 SolutionConfig::default(),
                 llm_provider,
             ),
-            visual_db: VisualDataManager::new(db_pool),
+            db_pool,
             event_tx,
         };
 
@@ -117,7 +117,7 @@ impl IntegratedProcessor {
 
         // Load image
         let image = image::open(&frame.file_path)?;
-        
+
         // Check for changes  
         let image_bytes = {
             let mut bytes = Vec::new();
@@ -125,7 +125,7 @@ impl IntegratedProcessor {
             bytes
         };
         let change_result = self.change_detector.detect_changes(frame.clone(), image_bytes, None).await?;
-        
+
         if !change_result.significant_change && change_result.change_score < self.config.min_change_threshold {
             debug!("No significant changes detected, skipping processing");
             self.event_tx.send(ProcessingEvent::FrameProcessed {
@@ -133,7 +133,7 @@ impl IntegratedProcessor {
                 timestamp: frame.timestamp,
                 has_changes: false,
             })?;
-            
+
             return Ok(ProcessingResult {
                 frame_id: frame.id.clone(),
                 processing_time_ms: start_time.elapsed().as_millis() as u64,
@@ -166,16 +166,16 @@ impl IntegratedProcessor {
                         word_count: ocr.words.len(),
                         paragraphs: ocr.paragraphs.len(),
                     })?;
-                    
+
                     // Store in database
                     self.store_text_extractions(&frame.id, &ocr).await?;
-                    
+
                     result.text_extracted = Some(TextExtractionSummary {
                         total_words: ocr.words.len(),
                         total_paragraphs: ocr.paragraphs.len(),
                         screen_regions: ocr.screen_regions.len(),
                     });
-                    
+
                     Some(ocr)
                 }
                 Err(e) => {
@@ -200,7 +200,7 @@ impl IntegratedProcessor {
                         activity_type: Some(format!("{:?}", analysis.activity_classification.primary_activity)),
                         confidence: analysis.activity_classification.confidence,
                     });
-                    
+
                     Some(analysis)
                 }
                 Err(e) => {
@@ -223,16 +223,16 @@ impl IntegratedProcessor {
                                 task: task.clone(),
                             })?;
                         }
-                        
+
                         // Send events for detected questions
                         for question in &task_result.detected_questions {
                             self.event_tx.send(ProcessingEvent::QuestionDetected {
                                 question: question.clone(),
                             })?;
                         }
-                        
-                        result.detected_tasks = task_result.detected_tasks;
-                        
+
+                        result.detected_tasks = task_result.detected_tasks.clone();
+
                         // Store in database
                         self.store_detected_tasks(&frame.id, &task_result).await?;
                     }
@@ -250,22 +250,22 @@ impl IntegratedProcessor {
                     Ok(problems) => {
                         for problem in &problems {
                             info!("Detected coding problem: {} - {}", problem.problem_type.to_string(), problem.title);
-                            
+
                             self.event_tx.send(ProcessingEvent::CodingProblemDetected {
                                 problem: problem.clone(),
                             })?;
-                            
+
                             // Generate solution if auto-solutions enabled
                             if self.config.enable_auto_solutions {
                                 match self.solution_generator.generate_solution(problem).await {
                                     Ok(solution) => {
                                         info!("Generated solution for problem: {}", problem.id);
-                                        
+
                                         self.event_tx.send(ProcessingEvent::SolutionGenerated {
                                             solution: solution.clone(),
                                             problem_id: problem.id.clone(),
                                         })?;
-                                        
+
                                         result.generated_solutions.push(solution);
                                     }
                                     Err(e) => {
@@ -274,7 +274,7 @@ impl IntegratedProcessor {
                                 }
                             }
                         }
-                        
+
                         result.detected_problems = problems;
                     }
                     Err(e) => {
@@ -288,7 +288,7 @@ impl IntegratedProcessor {
         self.store_frame_metadata(frame, &result).await?;
 
         result.processing_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         self.event_tx.send(ProcessingEvent::FrameProcessed {
             frame_id: frame.id.clone(),
             timestamp: frame.timestamp,
@@ -305,27 +305,27 @@ impl IntegratedProcessor {
     ) -> Result<()> {
         // Store text extractions in the high-frequency database
         for (word_idx, word) in ocr_result.words.iter().enumerate() {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 INSERT INTO hf_text_extractions (
                     frame_id, word_text, confidence, 
                     bbox_x, bbox_y, bbox_width, bbox_height,
                     font_size_estimate, text_type, line_id, paragraph_id
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-                "#,
-                frame_id,
-                word.text,
-                word.confidence,
-                word.bounding_box.x,
-                word.bounding_box.y,
-                word.bounding_box.width,
-                word.bounding_box.height,
-                word.font_size_estimate,
-                word.text_type.as_ref().map(|t| format!("{:?}", t)),
-                word.line_id as i32,
-                word.paragraph_id as i32,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#
             )
-            .execute(self.visual_db.pool())
+            .bind(frame_id)
+            .bind(&word.text)
+            .bind(word.confidence)
+            .bind(word.bounding_box.x)
+            .bind(word.bounding_box.y)
+            .bind(word.bounding_box.width)
+            .bind(word.bounding_box.height)
+            .bind(word.font_size_estimate)
+            .bind(word.text_type.as_ref().map(|t| format!("{:?}", t)))
+            .bind(word.line_id as i32)
+            .bind(word.paragraph_id as i32)
+            .execute(&self.db_pool)
             .await?;
         }
 
@@ -339,22 +339,22 @@ impl IntegratedProcessor {
     ) -> Result<()> {
         // Store detected tasks
         for task in &task_result.detected_tasks {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 INSERT INTO hf_detected_tasks (
                     frame_id, task_type, confidence, description,
                     evidence_text, bounding_regions, assistance_suggestions
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-                "#,
-                frame_id,
-                format!("{:?}", task.task_type),
-                task.confidence,
-                task.description,
-                serde_json::to_string(&task.context)?,
-                task.bounding_box.as_ref().map(|b| serde_json::to_string(b).unwrap_or_default()),
-                serde_json::to_string(&task.suggested_assistance)?,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                "#
             )
-            .execute(self.visual_db.pool())
+            .bind(frame_id)
+            .bind(format!("{:?}", task.task_type))
+            .bind(task.confidence)
+            .bind(&task.description)
+            .bind(serde_json::to_string(&task.context)?)
+            .bind(task.bounding_box.as_ref().map(|b| serde_json::to_string(b).unwrap_or_default()))
+            .bind(serde_json::to_string(&task.suggested_assistance)?)
+            .execute(&self.db_pool)
             .await?;
         }
 
@@ -367,23 +367,23 @@ impl IntegratedProcessor {
         result: &ProcessingResult,
     ) -> Result<()> {
         // Store high-frequency frame data
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO hf_video_frames (
                 timestamp_ms, session_id, frame_hash, change_score,
                 file_path, screen_resolution, active_app, processing_flags
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-            "#,
-            frame.timestamp.timestamp_millis(),
-            frame.metadata.session_id,
-            frame.image_hash,
-            0.5, // placeholder change score
-            frame.file_path.to_string_lossy(),
-            format!("{}x{}", frame.resolution.0, frame.resolution.1),
-            frame.metadata.active_application,
-            1, // processing flags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#
         )
-        .execute(&self.visual_db.pool)
+        .bind(frame.timestamp.timestamp_millis())
+        .bind(&frame.metadata.session_id)
+        .bind(&frame.image_hash)
+        .bind(0.5) // placeholder change score
+        .bind(frame.file_path.to_string_lossy())
+        .bind(format!("{}x{}", frame.resolution.0, frame.resolution.1))
+        .bind(&frame.metadata.active_application)
+        .bind(1) // processing flags
+        .execute(&self.db_pool)
         .await?;
 
         Ok(())
@@ -415,4 +415,3 @@ pub struct VisionAnalysisSummary {
     pub activity_type: Option<String>,
     pub confidence: f32,
 }
-

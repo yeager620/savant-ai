@@ -63,7 +63,7 @@ impl ComprehensiveOCRProcessor {
 
     pub async fn process_image(&mut self, image: &DynamicImage) -> Result<SimpleOCRResult> {
         let start_time = std::time::Instant::now();
-        
+
         // For testing purposes, return mock text
         // In a real implementation, we'd use Tesseract here
         let raw_text = if image.width() > 1000 && image.height() > 500 {
@@ -99,7 +99,7 @@ impl ComprehensiveOCRProcessor {
     fn create_word_data(&self, text: &str, _width: u32, _height: u32) -> Vec<WordData> {
         let mut words = Vec::new();
         let mut current_y = 50u32;
-        let mut current_x = 50u32;
+        let mut current_x;
         let mut line_id = 0;
         let mut paragraph_id = 0;
 
@@ -134,7 +134,7 @@ impl ComprehensiveOCRProcessor {
 
                 current_x += word_width + 10;
             }
-            
+
             line_id += 1;
             current_y += 25;
         }
@@ -223,7 +223,7 @@ impl ComprehensiveOCRProcessor {
 
     fn create_screen_regions(&self, words: &[WordData]) -> Vec<ScreenRegion> {
         let mut regions = Vec::new();
-        
+
         if words.is_empty() {
             return regions;
         }

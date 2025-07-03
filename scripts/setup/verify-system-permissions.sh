@@ -114,7 +114,7 @@ if command -v ollama &> /dev/null; then
     if ollama list 2>/dev/null | grep -q "devstral"; then
         print_status "OK" "Devstral model available"
     else
-        print_status "WARNING" "Devstral model not found - Install with: ollama pull devstral"
+        print_status "WARNING" "Llama3.2 model not found - Install with: ollama pull llama3.2"
     fi
 else
     print_status "ERROR" "Ollama not installed - Install with: brew install ollama"

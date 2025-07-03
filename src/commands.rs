@@ -1,12 +1,14 @@
+use savant_video::coding_problem_detector::ScreenRegion;
+use savant_video::coding_problem_detector::ProgrammingLanguage;
+use savant_video::coding_problem_detector::CodeContext;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-    
+
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
     async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
 }
@@ -33,7 +35,7 @@ where
                         problem_type: savant_video::CodingProblemType::AlgorithmChallenge,
                         title: "Detected Problem".to_string(),
                         description: "A coding problem was detected on your screen".to_string(),
-                        code_context: savant_video::CodeContext {
+                        code_context: CodeContext {
                             visible_code: String::new(),
                             focused_function: None,
                             imports: vec![],
@@ -44,20 +46,20 @@ where
                         },
                         error_details: None,
                         platform: None,
-                        language: savant_video::ProgrammingLanguage::Unknown,
+                        language: ProgrammingLanguage::Unknown,
                         starter_code: None,
                         test_cases: vec![],
                         constraints: vec![],
                         confidence: solution.confidence_score,
                         detected_at: solution.generated_at,
-                        screen_region: savant_video::ScreenRegion {
+                        screen_region: ScreenRegion {
                             x: 0,
                             y: 0,
                             width: 1920,
                             height: 1080,
                         },
                     };
-                    
+
                     callback(problem, solution);
                 }
             }
@@ -82,7 +84,7 @@ pub async fn copy_to_clipboard(text: &str) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "text": text
     })).unwrap();
-    
+
     let result = invoke("copy_to_clipboard", args).await;
     serde_wasm_bindgen::from_value::<String>(result)
         .map(|_| ())
@@ -93,7 +95,7 @@ pub async fn apply_solution(solution_code: &str) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "solution_code": solution_code
     })).unwrap();
-    
+
     let result = invoke("apply_solution", args).await;
     serde_wasm_bindgen::from_value::<String>(result)
         .map(|_| ())
@@ -109,7 +111,7 @@ pub async fn init_solution_processor(enable_auto_solutions: bool) -> Result<(), 
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "enable_auto_solutions": enable_auto_solutions
     })).unwrap();
-    
+
     let result = invoke("init_solution_processor", args).await;
     serde_wasm_bindgen::from_value::<String>(result)
         .map(|_| ())

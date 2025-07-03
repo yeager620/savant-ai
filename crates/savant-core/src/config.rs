@@ -54,7 +54,7 @@ impl Default for AppConfig {
                 default_provider: LlmProvider::Ollama {
                     url: "http://localhost:11434".to_string()
                 },
-                default_model: "devstral".to_string(),
+                default_model: "llama3.2".to_string(),
                 default_options: LlmOptions::default(),
             },
             browser: BrowserConfig {

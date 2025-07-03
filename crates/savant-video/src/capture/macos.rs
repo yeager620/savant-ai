@@ -11,7 +11,7 @@ use core_graphics::window::{
     CGWindowListCreateImage,
 };
 use foreign_types::ForeignType;
-use image::{DynamicImage, RgbaImage};
+use image::RgbaImage;
 use objc::runtime::{Class, Object};
 use objc::{msg_send, sel, sel_impl};
 use std::sync::Arc;
@@ -64,7 +64,7 @@ impl MacOSCapture {
             let _: () = msg_send![window, setLevel: i64::MAX]; // Above all windows
             let _: () = msg_send![window, setSharingType: 0]; // None - excludes from capture
             let _: () = msg_send![window, setCollectionBehavior: 1 << 7]; // Stationary
-            
+
             // This is the key for stealth mode - exclude from window list
             let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
             let _: () = msg_send![window, setHidesOnDeactivate: false];
@@ -76,7 +76,7 @@ impl MacOSCapture {
     fn capture_display_image(&self, display_id: u32) -> Result<Vec<u8>> {
         unsafe {
             let rect = CGDisplayBounds(display_id);
-            
+
             // Create image with specific options for stealth
             let options = if *self.stealth_mode.lock().unwrap() {
                 kCGWindowListOptionOnScreenOnly | (1 << 5) // Exclude desktop elements
@@ -189,7 +189,7 @@ impl VideoCapture for MacOSCapture {
     async fn capture_screen(&self) -> Result<ScreenCapture> {
         let display_id = unsafe { CGMainDisplayID() };
         let png_bytes = self.capture_display_image(display_id)?;
-        
+
         // Convert PNG bytes back to DynamicImage
         let image = image::load_from_memory(&png_bytes)?;
 
@@ -209,7 +209,7 @@ impl VideoCapture for MacOSCapture {
             for i in 0..count {
                 let screen = NSArray::objectAtIndex(screens, i);
                 let frame = NSScreen::frame(screen);
-                
+
                 // Get display ID
                 let device_description: id = msg_send![screen, deviceDescription];
                 let screen_number_key = NSString::alloc(nil)
@@ -231,14 +231,14 @@ impl VideoCapture for MacOSCapture {
 
     async fn set_stealth_mode(&self, enabled: bool) -> Result<()> {
         *self.stealth_mode.lock().unwrap() = enabled;
-        
+
         if enabled {
             // Create stealth window if not exists
             let mut window_guard = self.stealth_window.lock().unwrap();
             if window_guard.is_none() {
                 let window = self.create_stealth_window()?;
                 *window_guard = Some(window);
-                
+
                 // Make it key and order front briefly to activate stealth
                 unsafe {
                     let _: () = msg_send![window, makeKeyAndOrderFront: nil];
@@ -255,7 +255,7 @@ impl VideoCapture for MacOSCapture {
                 }
             }
         }
-        
+
         Ok(())
     }
 

@@ -135,7 +135,7 @@ cargo test --package savant-browser
 ```json
 {
   "prompt": "What is Rust?",
-  "model": "devstral", 
+  "model": "llama3.2", 
   "provider": {"Ollama": {"url": "http://localhost:11434"}},
   "options": {
     "temperature": 0.7,
@@ -150,7 +150,7 @@ cargo test --package savant-browser
 ```json
 {
   "content": "Rust is a systems programming language...",
-  "model": "devstral",
+  "model": "llama3.2",
   "provider": "ollama", 
   "tokens_used": null,
   "processing_time_ms": 1400,

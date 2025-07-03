@@ -1,7 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use image::{DynamicImage, ImageFormat};
-use std::io::Write;
+use image::DynamicImage;
 use crate::{BoundingBox, TextBlock, TextType};
 
 #[async_trait]
@@ -28,23 +27,23 @@ impl TesseractEngine {
 impl OCREngine for TesseractEngine {
     async fn extract_text(&self, image: &DynamicImage) -> Result<Vec<TextBlock>> {
         use std::io::Cursor;
-        
+
         // Convert to PNG bytes for Tesseract (more reliable than raw pixels)
         let mut png_data = Vec::new();
         image.write_to(&mut Cursor::new(&mut png_data), image::ImageFormat::Png)
             .map_err(|e| anyhow::anyhow!("Failed to encode image as PNG: {}", e))?;
-        
+
         // Create a temporary Tesseract instance for this operation
         let api = tesseract::Tesseract::new(None, Some(&self.languages.join("+")))?;
         let api = api.set_variable("tessedit_create_tsv", "1")?;
-        
+
         // Set image data from PNG bytes
         let mut api = api.set_image_from_mem(&png_data)?;
-        
+
         // Get TSV data for detailed block information
         let tsv_data = api.get_tsv_text(1)?;
         let text_blocks = self.parse_tsv_output(&tsv_data)?;
-        
+
         Ok(text_blocks)
     }
 
@@ -79,13 +78,13 @@ impl TesseractEngine {
     fn parse_tsv_output(&self, tsv_data: &str) -> Result<Vec<TextBlock>> {
         let mut text_blocks = Vec::new();
         let lines: Vec<&str> = tsv_data.lines().skip(1).collect(); // Skip header
-        
+
         for line in lines {
             let fields: Vec<&str> = line.split('\t').collect();
             if fields.len() < 12 {
                 continue;
             }
-            
+
             // Parse TSV fields: level, page_num, block_num, par_num, line_num, word_num,
             // left, top, width, height, conf, text
             let level: i32 = fields[0].parse().unwrap_or(0);
@@ -95,7 +94,7 @@ impl TesseractEngine {
             let height: u32 = fields[9].parse().unwrap_or(0);
             let confidence: f32 = fields[10].parse().unwrap_or(0.0) / 100.0; // Convert to 0-1 range
             let text = fields[11].trim();
-            
+
             // Only process word-level (level 5) with actual text
             if level == 5 && !text.is_empty() && confidence > 0.0 {
                 let text_block = TextBlock {
@@ -114,7 +113,7 @@ impl TesseractEngine {
                 text_blocks.push(text_block);
             }
         }
-        
+
         Ok(text_blocks)
     }
 }

@@ -341,7 +341,7 @@ Required permissions (must be granted manually):
 
 ### **Dependencies**
 - **Tesseract OCR**: Text extraction engine (`brew install tesseract`)
-- **Ollama**: Local LLM runtime (`brew install ollama && ollama pull devstral`)
+- **Ollama**: Local LLM runtime (`brew install ollama && ollama pull llama3.2`)
 - **ImageMagick**: Optional, for better image resizing (`brew install imagemagick`)
 - **Rust/Cargo**: Built into workspace dependencies
 

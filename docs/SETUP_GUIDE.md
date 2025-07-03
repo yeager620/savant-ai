@@ -30,7 +30,7 @@ brew install rust ollama tesseract imagemagick
 
 # Install Ollama models
 ollama pull llama3.2:3b
-ollama pull devstral
+ollama pull llama3.2
 
 # Build project
 cargo build --release --workspace

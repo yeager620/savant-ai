@@ -172,7 +172,7 @@ ${BLUE}EXAMPLES:${NC}
 
 ${BLUE}REQUIREMENTS:${NC}
   - Ollama running: ollama serve
-  - Model: ollama pull devstral
+  - Model: ollama pull llama3.2
   - Audio files in: $AUDIO_DIR
 
 ${BLUE}DATABASE:${NC}

@@ -168,7 +168,7 @@ ${BLUE}EXAMPLES:${NC}
 
 ${BLUE}REQUIREMENTS:${NC}
   - Ollama running: ollama serve
-  - Model available: ollama pull devstral
+  - Model available: ollama pull llama3.2
 EOF
         ;;
     *)

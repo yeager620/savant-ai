@@ -8,6 +8,10 @@ description = "Standalone LLM inference tool for Savant AI - follows UNIX philos
 name = "savant-llm"
 path = "src/main.rs"
 
+[lib]
+name = "savant_llm"
+path = "src/lib.rs"
+
 [dependencies]
 savant-core = { path = "../savant-core" }
 clap = { workspace = true }
@@ -17,6 +21,7 @@ tokio = { workspace = true }
 anyhow = { workspace = true }
 reqwest = { workspace = true }
 chrono = { workspace = true }
+async-trait = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"

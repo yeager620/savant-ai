@@ -1,4 +1,7 @@
-use leptos::*;
+use leptos::prelude::*;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
+use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
 use savant_video::GeneratedSolution;
 use savant_video::DetectedCodingProblem;
@@ -36,12 +39,12 @@ impl Default for SolutionState {
 
 #[component]
 pub fn SolutionDisplay() -> impl IntoView {
-    let (solution_state, set_solution_state) = create_signal(SolutionState::default());
-    let (is_dragging, set_is_dragging) = create_signal(false);
-    let (drag_start, set_drag_start) = create_signal((0.0, 0.0));
+    let (solution_state, set_solution_state) = signal(SolutionState::default());
+    let (is_dragging, set_is_dragging) = signal(false);
+    let (drag_start, set_drag_start) = signal((0.0, 0.0));
 
     // Listen for new solutions via Tauri events
-    create_effect(move |_| {
+    let _ = Effect::new(move |_| {
         spawn_local(async move {
             let _ = commands::listen_for_solutions(move |problem, solution| {
                 set_solution_state.update(|state| {
@@ -56,54 +59,54 @@ pub fn SolutionDisplay() -> impl IntoView {
 
     // Handle window dragging
     let handle_mouse_down = move |e: web_sys::MouseEvent| {
-        set_is_dragging(true);
-        set_drag_start((e.client_x() as f32, e.client_y() as f32));
+        set_is_dragging.set(true);
+        set_drag_start.set((e.client_x() as f32, e.client_y() as f32));
         e.prevent_default();
     };
 
     let handle_mouse_move = move |e: web_sys::MouseEvent| {
-        if is_dragging() {
-            let (start_x, start_y) = drag_start();
+        if is_dragging.get() {
+            let (start_x, start_y) = drag_start.get();
             let delta_x = e.client_x() as f32 - start_x;
             let delta_y = e.client_y() as f32 - start_y;
-            
+
             set_solution_state.update(|state| {
                 state.position.x += delta_x;
                 state.position.y += delta_y;
             });
-            
-            set_drag_start((e.client_x() as f32, e.client_y() as f32));
+
+            set_drag_start.set((e.client_x() as f32, e.client_y() as f32));
         }
     };
 
     let handle_mouse_up = move |_| {
-        set_is_dragging(false);
+        set_is_dragging.set(false);
     };
 
     // Add global mouse listeners
-    create_effect(move |_| {
-        if is_dragging() {
+    let _ = Effect::new(move |_| {
+        if is_dragging.get() {
             let window = web_sys::window().unwrap();
             let document = window.document().unwrap();
-            
+
             let mousemove_closure = Closure::<dyn Fn(_)>::new(move |e: web_sys::MouseEvent| {
                 handle_mouse_move(e);
             });
-            
+
             let mouseup_closure = Closure::<dyn Fn(_)>::new(move |e: web_sys::MouseEvent| {
                 handle_mouse_up(e);
             });
-            
+
             document.add_event_listener_with_callback(
                 "mousemove",
                 mousemove_closure.as_ref().unchecked_ref()
             ).unwrap();
-            
+
             document.add_event_listener_with_callback(
                 "mouseup",
                 mouseup_closure.as_ref().unchecked_ref()
             ).unwrap();
-            
+
             // Store closures to prevent them from being dropped
             mousemove_closure.forget();
             mouseup_closure.forget();
@@ -111,14 +114,14 @@ pub fn SolutionDisplay() -> impl IntoView {
     });
 
     view! {
-        <Show when=move || solution_state().visible>
+        <Show when=move || solution_state.get().visible>
             <div
                 class="solution-overlay"
                 style=move || format!(
                     "left: {}px; top: {}px; {}",
-                    solution_state().position.x,
-                    solution_state().position.y,
-                    if solution_state().minimized { "height: 40px;" } else { "" }
+                    solution_state.get().position.x,
+                    solution_state.get().position.y,
+                    if solution_state.get().minimized { "height: 40px;" } else { "" }
                 )
             >
                 // Title bar
@@ -128,7 +131,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                 >
                     <div class="solution-title">
                         {move || {
-                            solution_state().current_problem
+                            solution_state.get().current_problem
                                 .as_ref()
                                 .map(|p| p.title.clone())
                                 .unwrap_or_else(|| "Solution Assistant".to_string())
@@ -143,7 +146,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                 });
                             }
                         >
-                            {move || if solution_state().minimized { "▲" } else { "▼" }}
+                            {move || if solution_state.get().minimized { "▲" } else { "▼" }}
                         </button>
                         <button
                             class="solution-control-btn"
@@ -159,15 +162,15 @@ pub fn SolutionDisplay() -> impl IntoView {
                 </div>
 
                 // Content area
-                <Show when=move || !solution_state().minimized>
+                <Show when=move || !solution_state.get().minimized>
                     <div class="solution-content">
                         // Problem description
-                        <Show when=move || solution_state().current_problem.is_some()>
+                        <Show when=move || solution_state.get().current_problem.is_some()>
                             <div class="solution-section">
                                 <h3 class="solution-section-title">"Problem Detected"</h3>
                                 <div class="problem-type">
                                     {move || {
-                                        solution_state().current_problem
+                                        solution_state.get().current_problem
                                             .as_ref()
                                             .map(|p| format!("{:?}", p.problem_type))
                                             .unwrap_or_default()
@@ -175,7 +178,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                 </div>
                                 <div class="problem-description">
                                     {move || {
-                                        solution_state().current_problem
+                                        solution_state.get().current_problem
                                             .as_ref()
                                             .map(|p| p.description.clone())
                                             .unwrap_or_default()
@@ -185,13 +188,13 @@ pub fn SolutionDisplay() -> impl IntoView {
                         </Show>
 
                         // Solution code
-                        <Show when=move || solution_state().current_solution.is_some()>
+                        <Show when=move || solution_state.get().current_solution.is_some()>
                             <div class="solution-section">
                                 <h3 class="solution-section-title">
                                     "Generated Solution"
                                     <span class="solution-confidence">
                                         {move || {
-                                            solution_state().current_solution
+                                            solution_state.get().current_solution
                                                 .as_ref()
                                                 .map(|s| format!("{}% confidence", (s.confidence_score * 100.0) as i32))
                                                 .unwrap_or_default()
@@ -202,7 +205,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                     <pre class="solution-code">
                                         <code>
                                             {move || {
-                                                solution_state().current_solution
+                                                solution_state.get().current_solution
                                                     .as_ref()
                                                     .map(|s| s.solution_code.clone())
                                                     .unwrap_or_default()
@@ -212,7 +215,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                     <button
                                         class="copy-button"
                                         on:click=move |_| {
-                                            if let Some(solution) = solution_state().current_solution.as_ref() {
+                                            if let Some(solution) = solution_state.get().current_solution.as_ref() {
                                                 let _ = commands::copy_to_clipboard(&solution.solution_code);
                                             }
                                         }
@@ -224,7 +227,7 @@ pub fn SolutionDisplay() -> impl IntoView {
 
                             // Explanation
                             <Show when=move || {
-                                solution_state().current_solution
+                                solution_state.get().current_solution
                                     .as_ref()
                                     .and_then(|s| s.explanation.as_ref())
                                     .is_some()
@@ -233,7 +236,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                     <h3 class="solution-section-title">"Explanation"</h3>
                                     <div class="solution-explanation">
                                         {move || {
-                                            solution_state().current_solution
+                                            solution_state.get().current_solution
                                                 .as_ref()
                                                 .and_then(|s| s.explanation.clone())
                                                 .unwrap_or_default()
@@ -244,7 +247,8 @@ pub fn SolutionDisplay() -> impl IntoView {
 
                             // Complexity analysis
                             <Show when=move || {
-                                let sol = solution_state().current_solution.as_ref();
+                                let state = solution_state.get();
+                                let sol = state.current_solution.as_ref();
                                 sol.and_then(|s| s.time_complexity.as_ref()).is_some() ||
                                 sol.and_then(|s| s.space_complexity.as_ref()).is_some()
                             }>
@@ -252,7 +256,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                     <h3 class="solution-section-title">"Complexity Analysis"</h3>
                                     <div class="complexity-grid">
                                         <Show when=move || {
-                                            solution_state().current_solution
+                                            solution_state.get().current_solution
                                                 .as_ref()
                                                 .and_then(|s| s.time_complexity.as_ref())
                                                 .is_some()
@@ -260,7 +264,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                             <div class="complexity-item">
                                                 <strong>"Time:"</strong>
                                                 {move || {
-                                                    solution_state().current_solution
+                                                    solution_state.get().current_solution
                                                         .as_ref()
                                                         .and_then(|s| s.time_complexity.clone())
                                                         .unwrap_or_default()
@@ -268,7 +272,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                             </div>
                                         </Show>
                                         <Show when=move || {
-                                            solution_state().current_solution
+                                            solution_state.get().current_solution
                                                 .as_ref()
                                                 .and_then(|s| s.space_complexity.as_ref())
                                                 .is_some()
@@ -276,7 +280,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                             <div class="complexity-item">
                                                 <strong>"Space:"</strong>
                                                 {move || {
-                                                    solution_state().current_solution
+                                                    solution_state.get().current_solution
                                                         .as_ref()
                                                         .and_then(|s| s.space_complexity.clone())
                                                         .unwrap_or_default()
@@ -289,7 +293,7 @@ pub fn SolutionDisplay() -> impl IntoView {
 
                             // Test results
                             <Show when=move || {
-                                solution_state().current_solution
+                                solution_state.get().current_solution
                                     .as_ref()
                                     .map(|s| !s.test_results.is_empty())
                                     .unwrap_or(false)
@@ -298,7 +302,7 @@ pub fn SolutionDisplay() -> impl IntoView {
                                     <h3 class="solution-section-title">"Test Results"</h3>
                                     <div class="test-results">
                                         {move || {
-                                            solution_state().current_solution
+                                            solution_state.get().current_solution
                                                 .as_ref()
                                                 .map(|s| {
                                                     let passed = s.test_results.iter().filter(|t| t.passed).count();
@@ -317,9 +321,11 @@ pub fn SolutionDisplay() -> impl IntoView {
                             <button
                                 class="solution-action-btn primary"
                                 on:click=move |_| {
-                                    if let Some(solution) = solution_state().current_solution.as_ref() {
+                                    let state = solution_state.get();
+                                    if let Some(solution) = state.current_solution.as_ref() {
+                                        let solution_code = solution.solution_code.clone();
                                         spawn_local(async move {
-                                            let _ = commands::apply_solution(&solution.solution_code).await;
+                                            let _ = commands::apply_solution(&solution_code).await;
                                         });
                                     }
                                 }

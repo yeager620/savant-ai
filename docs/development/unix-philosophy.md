@@ -74,7 +74,7 @@ done
 ### **1. Testability in Isolation**
 ```bash
 # Test LLM without UI, browser, or other components
-$ echo "Test prompt" | savant-llm --provider ollama --model devstral
+$ echo "Test prompt" | savant-llm --provider ollama --model llama3.2
 $ cargo test --package savant-llm
 ```
 

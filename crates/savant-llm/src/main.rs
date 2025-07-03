@@ -26,7 +26,7 @@ struct Cli {
     prompt: Option<String>,
 
     /// Model name to use
-    #[arg(short, long, default_value = "devstral")]
+    #[arg(short, long, default_value = "llama3.2")]
     model: String,
 
     /// Temperature for generation (0.0-1.0)

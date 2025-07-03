@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use image::{DynamicImage, GenericImageView};
+use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 
 pub mod detector;
@@ -326,13 +326,13 @@ impl VisionAnalyzer {
 
         // Detect visual elements
         let visual_elements = self.ui_detector.detect_elements(image).await?;
-        
+
         // Detect applications
         let app_context = self.app_detector.detect_applications(image, &visual_elements).await?;
-        
+
         // Classify current activity
         let activity_classification = self.activity_classifier.classify_activity(image, &app_context, &visual_elements).await?;
-        
+
         // Analyze overall context
         let visual_context = self.context_analyzer.analyze_context(image, &app_context, &visual_elements).await?;
 
