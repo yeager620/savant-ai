@@ -207,6 +207,28 @@ impl VisualDataManager {
         Ok(())
     }
 
+    /// Store high-frequency frame data
+    pub async fn store_hf_frame(&self, frame: &HighFrequencyFrame) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO hf_video_frames 
+               (timestamp_ms, session_id, frame_hash, change_score, file_path, 
+                screen_resolution, active_app, processing_flags)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#
+        )
+        .bind(frame.timestamp_ms)
+        .bind(&frame.session_id)
+        .bind(&frame.frame_hash)
+        .bind(frame.change_score)
+        .bind(&frame.file_path)
+        .bind(&frame.screen_resolution)
+        .bind(&frame.active_app)
+        .bind(frame.processing_flags)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Store a compressed frame (update existing frame record)
     pub async fn store_compressed_frame(&self, _compressed_frame: &CompressedFrame) -> Result<()> {
         // For testing purposes, use mock data
@@ -236,15 +258,12 @@ impl VisualDataManager {
 
     /// Store text extraction
     pub async fn store_text_extraction(&self, extraction: &TextExtraction) -> Result<()> {
-        let id = Uuid::new_v4().to_string();
-
         sqlx::query(
             r#"INSERT INTO hf_text_extractions 
-               (id, frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, 
+               (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, 
                 font_size_estimate, text_type, line_id, paragraph_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
         )
-        .bind(&id)
         .bind(&extraction.frame_id)
         .bind(&extraction.word_text)
         .bind(extraction.confidence)
@@ -766,15 +785,13 @@ impl VisualDataManager {
 
     /// Store detected task
     pub async fn store_detected_task(&self, task: &DetectedTask) -> Result<()> {
-        let id = Uuid::new_v4().to_string();
 
         sqlx::query(
-            r#"INSERT INTO detected_tasks 
-               (id, frame_id, task_type, confidence, description, evidence_text, 
+            r#"INSERT INTO hf_detected_tasks 
+               (frame_id, task_type, confidence, description, evidence_text, 
                 bounding_regions, assistance_suggestions, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"#
         )
-        .bind(&id)
         .bind(&task.frame_id)
         .bind(&task.task_type)
         .bind(task.confidence)
@@ -796,7 +813,7 @@ impl VisualDataManager {
         limit: i64
     ) -> Result<Vec<DetectedTask>> {
         let rows = sqlx::query(
-            r#"SELECT t.* FROM detected_tasks t
+            r#"SELECT t.* FROM hf_detected_tasks t
                JOIN hf_video_frames f ON t.frame_id = f.frame_hash
                WHERE f.timestamp_ms BETWEEN ? AND ?
                ORDER BY f.timestamp_ms DESC

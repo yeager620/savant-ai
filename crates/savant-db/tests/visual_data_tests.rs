@@ -237,21 +237,13 @@ async fn test_store_text_extractions() {
         session_id: "test-session".to_string(),
         frame_hash: frame_id.to_string(),
         change_score: 0.9,
-        file_path: None,
-        screen_resolution: None,
-        active_app: None,
+        file_path: Some("/tmp/frame.png".to_string()),
+        screen_resolution: Some("1920x1080".to_string()),
+        active_app: Some("TestApp".to_string()),
         processing_flags: 0,
     };
 
-    let frame_data = serde_json::json!({
-        "id": frame_id,
-        "timestamp": Utc::now().to_rfc3339(),
-        "file_path": "/tmp/frame.png",
-        "image_hash": frame_id,
-        "session_id": "test-session"
-    });
-
-    manager.store_frame(&frame_data).await.unwrap();
+    manager.store_hf_frame(&frame).await.unwrap();
 
     // Store text extractions
     let extractions = vec![
@@ -329,15 +321,7 @@ async fn test_search_text_content() {
             processing_flags: 0,
         };
 
-        let frame_data = serde_json::json!({
-            "id": frame_id,
-            "timestamp": Utc::now().to_rfc3339(),
-            "file_path": "/tmp/frame.png",
-            "image_hash": frame_id,
-            "session_id": "test-session"
-        });
-
-        manager.store_frame(&frame_data).await.unwrap();
+        manager.store_hf_frame(&frame).await.unwrap();
 
         // Store text
         let extraction = TextExtraction {
@@ -393,20 +377,17 @@ async fn test_get_activity_summary() {
 
     for (app_name, count) in apps {
         for i in 0..count {
-            let frame_id = format!("{}-{}-{}", app_name, count, i);
-            let frame_data = serde_json::json!({
-                "id": frame_id,
-                "timestamp": chrono::Utc.timestamp_millis(base_time + (i as i64 * 100)).to_rfc3339(),
-                "file_path": "/tmp/app_usage_frame.png",
-                "resolution_width": 1920,
-                "resolution_height": 1080,
-                "file_size_bytes": 1000,
-                "image_hash": frame_id,
-                "change_detected": false,
-                "active_application": app_name,
-                "session_id": test_session_id
-            });
-            manager.store_frame(&frame_data).await.unwrap();
+            let frame = HighFrequencyFrame {
+                timestamp_ms: base_time + (i as i64 * 100),
+                session_id: test_session_id.to_string(),
+                frame_hash: format!("{}-{}-{}", app_name, count, i),
+                change_score: 0.5,
+                file_path: Some("/tmp/app_usage_frame.png".to_string()),
+                screen_resolution: Some("1920x1080".to_string()),
+                active_app: Some(app_name.to_string()),
+                processing_flags: 0,
+            };
+            manager.store_hf_frame(&frame).await.unwrap();
         }
     }
 
@@ -431,6 +412,21 @@ async fn test_detected_tasks_storage() {
     let (manager, _temp_dir) = setup_test_db().await.unwrap();
 
     let frame_id = "task-frame-1";
+    let timestamp = Utc::now().timestamp_millis();
+    
+    // First store a frame that the task can reference
+    let frame = HighFrequencyFrame {
+        timestamp_ms: timestamp,
+        session_id: "task-test-session".to_string(),
+        frame_hash: frame_id.to_string(),
+        change_score: 0.7,
+        file_path: Some("/tmp/task_frame.png".to_string()),
+        screen_resolution: Some("1920x1080".to_string()),
+        active_app: Some("LeetCode".to_string()),
+        processing_flags: 0,
+    };
+    manager.store_hf_frame(&frame).await.unwrap();
+
     let task = savant_db::visual_data::DetectedTask {
         frame_id: frame_id.to_string(),
         task_type: "CodingProblem".to_string(),
@@ -445,8 +441,8 @@ async fn test_detected_tasks_storage() {
 
     // Retrieve tasks
     let tasks = manager.get_recent_tasks(
-        Utc::now().timestamp_millis() - 60000,
-        Utc::now().timestamp_millis() + 60000,
+        timestamp - 1000,
+        timestamp + 1000,
         10,
     ).await.unwrap();
 
@@ -463,40 +459,85 @@ async fn test_complex_query_scenarios() {
     let base_time = Utc::now().timestamp_millis();
     let session_id = "coding-session-1";
 
-    // Frame 1: Looking at LeetCode problem
-    let frame_id = "filter_frame_1";
-    let frame_data = serde_json::json!({
-        "id": frame_id,
-        "timestamp": chrono::Utc.timestamp_millis(base_time).to_rfc3339(),
-        "file_path": "/tmp/filter_frame_1.png",
-        "resolution_width": 1920,
-        "resolution_height": 1080,
-        "file_size_bytes": 1000,
-        "image_hash": frame_id,
-        "change_detected": false,
-        "active_application": "Visual Studio Code",
-        "session_id": session_id
-    });
-    manager.store_frame(&frame_data).await.unwrap();
+    // Frame 1: Looking at LeetCode problem  
+    let frame1 = HighFrequencyFrame {
+        timestamp_ms: base_time,
+        session_id: session_id.to_string(),
+        frame_hash: "filter_frame_1".to_string(),
+        change_score: 0.8,
+        file_path: Some("/tmp/filter_frame_1.png".to_string()),
+        screen_resolution: Some("1920x1080".to_string()),
+        active_app: Some("Chrome".to_string()),
+        processing_flags: 0,
+    };
+    manager.store_hf_frame(&frame1).await.unwrap();
 
-    let snippet_data = serde_json::json!({
-        "programming_language": "Python",
-        "code_content": "print('hello')",
-        "complexity_score": 0.1,
-        "context": ""
-    });
-    manager.store_code_snippet(frame_id, &snippet_data).await.unwrap();
+    // Frame 2: Coding in VS Code
+    let frame2 = HighFrequencyFrame {
+        timestamp_ms: base_time + 1000,
+        session_id: session_id.to_string(),
+        frame_hash: "filter_frame_2".to_string(),
+        change_score: 0.9,
+        file_path: Some("/tmp/filter_frame_2.png".to_string()),
+        screen_resolution: Some("1920x1080".to_string()),
+        active_app: Some("Visual Studio Code".to_string()),
+        processing_flags: 0,
+    };
+    manager.store_hf_frame(&frame2).await.unwrap();
 
-    let opportunity_data = serde_json::json!({
-        "opportunity_type": "Test",
-        "description": "Test",
-        "confidence": 0.5,
-        "suggested_action": "Test",
-        "context_info": "Test",
-        "urgency": "High"
-    });
-    manager.store_interaction_opportunity(frame_id, &opportunity_data).await.unwrap();
-    manager.store_ocr_content(frame_id, &serde_json::json!({"text": "Python code here"})).await.unwrap();
+    // Add text extractions to simulate problem description and code
+    let problem_texts = vec![
+        ("Two", "DocumentContent", 100, 50),
+        ("Sum", "DocumentContent", 150, 50),
+        ("array", "DocumentContent", 200, 50),
+        ("of", "DocumentContent", 250, 50),
+        ("integers", "DocumentContent", 300, 50),
+    ];
+
+    for (text, text_type, x, y) in problem_texts {
+        let extraction = TextExtraction {
+            frame_id: "filter_frame_1".to_string(),
+            word_text: text.to_string(),
+            confidence: 0.95,
+            bbox_x: x,
+            bbox_y: y,
+            bbox_width: 50,
+            bbox_height: 20,
+            font_size_estimate: Some(12.0),
+            text_type: Some(text_type.to_string()),
+            line_id: 0,
+            paragraph_id: 0,
+        };
+        manager.store_text_extraction(&extraction).await.unwrap();
+    }
+
+    // Add code text extractions
+    let code_texts = vec![
+        ("def", "CodeSnippet", 50, 100),
+        ("twoSum", "CodeSnippet", 100, 100),
+        ("self", "CodeSnippet", 180, 100),
+        ("nums", "CodeSnippet", 220, 100),
+        ("target", "CodeSnippet", 270, 100),
+        ("return", "CodeSnippet", 50, 120),
+        ("nums", "CodeSnippet", 100, 120),
+    ];
+
+    for (text, text_type, x, y) in code_texts {
+        let extraction = TextExtraction {
+            frame_id: "filter_frame_2".to_string(),
+            word_text: text.to_string(),
+            confidence: 0.95,
+            bbox_x: x,
+            bbox_y: y,
+            bbox_width: 40,
+            bbox_height: 18,
+            font_size_estimate: Some(11.0),
+            text_type: Some(text_type.to_string()),
+            line_id: 0,
+            paragraph_id: 0,
+        };
+        manager.store_text_extraction(&extraction).await.unwrap();
+    }
 
     // Test complex queries
 
@@ -516,7 +557,7 @@ async fn test_complex_query_scenarios() {
     .await
     .unwrap();
 
-    assert!(code_snippets.len() >= 8); // All code words
+    assert!(code_snippets.len() >= 7); // All code words we inserted
     // We can't directly access fields with the regular query, so we'll skip this assertion
     // assert!(code_snippets.iter().any(|r| r.word_text == "twoSum"));
 
@@ -593,17 +634,7 @@ async fn test_performance_with_large_dataset() {
             processing_flags: 0,
         };
 
-        let frame_id = format!("frame-{}", i);
-        let frame_data = serde_json::json!({
-            "id": frame_id,
-            "timestamp": chrono::Utc.timestamp_millis(base_time + (i * 500)).to_rfc3339(),
-            "file_path": "/tmp/frame.png",
-            "image_hash": frame_id,
-            "session_id": "perf-test",
-            "active_application": "TestApp"
-        });
-
-        manager.store_frame(&frame_data).await.unwrap();
+        manager.store_hf_frame(&frame).await.unwrap();
 
         // Add some text extractions
         for j in 0..words_per_frame {
