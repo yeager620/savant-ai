@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "mock_demo"
 path = "src/mock_demo.rs"
 
+[[bin]]
+name = "optimized_demo"
+path = "src/optimized_demo.rs"
+
 [dependencies]
 # Core dependencies
 anyhow = { workspace = true }
@@ -32,3 +36,4 @@ savant-db = { path = "../savant-db" }
 image = "0.25"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+tempfile = "3.0"

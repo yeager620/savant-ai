@@ -9,12 +9,14 @@ pub mod preprocessor;
 pub mod classifier;
 pub mod analyzer;
 pub mod simple_extractor;
+pub mod fast_config;
 
 pub use engine::{OCREngine, TesseractEngine};
 pub use preprocessor::{ImagePreprocessor, PreprocessingConfig};
 pub use classifier::{TextClassifier, TextType};
 pub use analyzer::{StructuredContentAnalyzer, StructuredContent};
 pub use simple_extractor::{ComprehensiveOCRProcessor, ComprehensiveOCRResult, WordData, LineData, ParagraphData};
+pub use fast_config::{FastOCRConfig, FastOCRProcessor, OCRPresets, OCRPerformanceMetrics};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoundingBox {

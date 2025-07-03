@@ -135,6 +135,92 @@ impl VisualDataManager {
         &self.pool
     }
 
+    /// Initialize database schema for high-frequency visual data
+    pub async fn initialize_schema(&self) -> Result<()> {
+        // Create high-frequency video frames table
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS hf_video_frames (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp_ms INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                frame_hash TEXT NOT NULL UNIQUE,
+                change_score REAL DEFAULT 0.0,
+                file_path TEXT,
+                screen_resolution TEXT,
+                active_app TEXT,
+                processing_flags INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            "#
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create text extractions table
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS hf_text_extractions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_id TEXT NOT NULL,
+                word_text TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                bbox_x INTEGER NOT NULL,
+                bbox_y INTEGER NOT NULL,
+                bbox_width INTEGER NOT NULL,
+                bbox_height INTEGER NOT NULL,
+                font_size_estimate REAL,
+                text_type TEXT,
+                line_id INTEGER,
+                paragraph_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (frame_id) REFERENCES hf_video_frames(frame_hash)
+            )
+            "#
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create detected tasks table
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS hf_detected_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_id TEXT NOT NULL,
+                task_type TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                description TEXT,
+                evidence_text TEXT,
+                bounding_regions TEXT,
+                assistance_suggestions TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (frame_id) REFERENCES hf_video_frames(frame_hash)
+            )
+            "#
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create indices for performance
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_hf_frames_timestamp ON hf_video_frames (timestamp_ms)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_hf_frames_session ON hf_video_frames (session_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_text_frame ON hf_text_extractions (frame_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_frame ON hf_detected_tasks (frame_id)")
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
     /// Create a new video session
     pub async fn create_session(&self, config_snapshot: Option<&str>) -> Result<String> {
         let id = Uuid::new_v4().to_string();
