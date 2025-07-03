@@ -3,8 +3,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
-use savant_video::GeneratedSolution;
-use savant_video::DetectedCodingProblem;
+use crate::types::{GeneratedSolution, DetectedCodingProblem};
 use crate::commands;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

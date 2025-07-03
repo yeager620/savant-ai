@@ -1,6 +1,4 @@
-use savant_video::coding_problem_detector::ScreenRegion;
-use savant_video::coding_problem_detector::ProgrammingLanguage;
-use savant_video::coding_problem_detector::CodeContext;
+use crate::types::{ScreenRegion, ProgrammingLanguage, CodeContext, DetectedCodingProblem, GeneratedSolution, CodingProblemType};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -15,24 +13,24 @@ extern "C" {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolutionListenerCallback {
-    pub problem: savant_video::DetectedCodingProblem,
-    pub solution: savant_video::GeneratedSolution,
+    pub problem: DetectedCodingProblem,
+    pub solution: GeneratedSolution,
 }
 
 pub async fn listen_for_solutions<F>(mut callback: F) -> Result<(), String>
 where
-    F: FnMut(savant_video::DetectedCodingProblem, savant_video::GeneratedSolution) + 'static,
+    F: FnMut(DetectedCodingProblem, GeneratedSolution) + 'static,
 {
     // Listen for solution events
     let solution_handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
         if let Ok(event_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(event) {
             if let Some(payload) = event_data.get("payload") {
-                if let Ok(solution) = serde_json::from_value::<savant_video::GeneratedSolution>(payload.clone()) {
+                if let Ok(solution) = serde_json::from_value::<GeneratedSolution>(payload.clone()) {
                     // We need to get the problem from somewhere - for now, create a placeholder
                     // In real implementation, the event would include both problem and solution
-                    let problem = savant_video::DetectedCodingProblem {
+                    let problem = DetectedCodingProblem {
                         id: solution.problem_id.clone(),
-                        problem_type: savant_video::CodingProblemType::AlgorithmChallenge,
+                        problem_type: CodingProblemType::AlgorithmChallenge,
                         title: "Detected Problem".to_string(),
                         description: "A coding problem was detected on your screen".to_string(),
                         code_context: CodeContext {

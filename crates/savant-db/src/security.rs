@@ -444,13 +444,30 @@ impl QuerySecurityManager {
     /// Check for sensitive content patterns
     fn contains_sensitive_patterns(&self, query: &str) -> bool {
         let sensitive_patterns = [
+            // Data sensitivity patterns
             "password", "secret", "key", "token", "auth",
             "credit card", "ssn", "social security",
             "personal", "private", "confidential",
         ];
 
+        // SQL injection patterns (more specific to avoid false positives)
+        let sql_injection_patterns = [
+            "drop table", "delete from", "update set", "alter table", 
+            "create table", "insert into", "truncate table",
+            "exec ", "execute ", "grant ", "revoke ",
+            "union select", "select * from", "where 1=1",
+            "--", "/*", "*/", "';", "xp_", "sp_",
+        ];
+
         let query_lower = query.to_lowercase();
-        sensitive_patterns.iter().any(|pattern| query_lower.contains(pattern))
+        
+        // Check sensitivity patterns
+        if sensitive_patterns.iter().any(|pattern| query_lower.contains(pattern)) {
+            return true;
+        }
+
+        // Check SQL injection patterns (more specific)
+        sql_injection_patterns.iter().any(|pattern| query_lower.contains(pattern))
     }
 
     /// Add a safe default LIMIT to queries that don't have one
@@ -513,19 +530,20 @@ mod tests {
         assert!(security.validate_natural_query(&long_query).is_err());
     }
 
-    #[test]
-    fn test_sql_validation() {
+    #[tokio::test]
+    async fn test_sql_validation() {
         let security = QuerySecurityManager::new();
 
         // Valid SQL
-        assert!(security.validate_sql_query(
-            "SELECT * FROM conversations WHERE speaker = 'john' LIMIT 10"
-        ).is_ok());
+        assert!(security.validate_query(
+            "SELECT * FROM conversations WHERE speaker = 'john' LIMIT 10",
+            QueryComplexity::Low
+        ).await.is_ok());
 
         // Invalid SQL
-        assert!(security.validate_sql_query("DROP TABLE conversations").is_err());
-        assert!(security.validate_sql_query("UPDATE conversations SET title = 'hacked'").is_err());
-        assert!(security.validate_sql_query("SELECT * FROM unauthorized_table").is_err());
+        assert!(security.validate_query("DROP TABLE conversations", QueryComplexity::Low).await.is_err());
+        assert!(security.validate_query("UPDATE conversations SET title = 'hacked'", QueryComplexity::Low).await.is_err());
+        assert!(security.validate_query("SELECT * FROM unauthorized_table", QueryComplexity::Low).await.is_err());
     }
 
     #[test]

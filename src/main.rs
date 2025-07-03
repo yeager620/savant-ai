@@ -2,6 +2,7 @@ mod components;
 mod utils;
 mod taskbar_app;
 mod commands;
+mod types;
 
 use taskbar_app::*;
 use leptos::prelude::*;

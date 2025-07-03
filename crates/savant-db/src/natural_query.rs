@@ -530,15 +530,27 @@ impl IntentClassifier {
     }
 
     pub fn classify(&self, query: &str) -> QueryIntent {
-        for (intent_type, regexes) in &self.patterns {
-            for regex in regexes {
-                if regex.is_match(query) {
-                    return QueryIntent {
-                        intent_type: intent_type.clone(),
-                        entities: HashMap::new(),
-                        confidence: 0.8, // Pattern-based confidence
-                        original_query: query.to_string(),
-                    };
+        // Check patterns in priority order to avoid ambiguity
+        let priority_order = [
+            IntentType::AnalyzeSpeaker,
+            IntentType::GetStatistics,
+            IntentType::ExportData,
+            IntentType::ListSpeakers,
+            IntentType::FindConversations,
+            IntentType::SearchContent,
+        ];
+
+        for intent_type in &priority_order {
+            if let Some(regexes) = self.patterns.get(intent_type) {
+                for regex in regexes {
+                    if regex.is_match(query) {
+                        return QueryIntent {
+                            intent_type: intent_type.clone(),
+                            entities: HashMap::new(),
+                            confidence: 0.8, // Pattern-based confidence
+                            original_query: query.to_string(),
+                        };
+                    }
                 }
             }
         }
@@ -571,6 +583,8 @@ impl EntityExtractor {
                 Regex::new(r"(?i)\babout\s+([a-zA-Z][a-zA-Z0-9_\s]+?)(?:\s|$|,|\.)").unwrap(),
                 Regex::new(r"(?i)\bregarding\s+([a-zA-Z][a-zA-Z0-9_\s]+?)(?:\s|$|,|\.)").unwrap(),
                 Regex::new(r"(?i)\bconcerning\s+([a-zA-Z][a-zA-Z0-9_\s]+?)(?:\s|$|,|\.)").unwrap(),
+                Regex::new(r"(?i)\bfor\s+([a-zA-Z][a-zA-Z0-9_\s]+?)(?:\s|$|,|\.)").unwrap(),
+                Regex::new(r"(?i)\b(project\s+\w+)").unwrap(),
             ],
             number_patterns: Regex::new(r"(?i)\b(\d+)\s*(?:conversations?|results?|items?)\b").unwrap(),
         }
