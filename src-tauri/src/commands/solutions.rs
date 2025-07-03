@@ -9,7 +9,6 @@ use savant_video::{
     IntegratedProcessor, ProcessorConfig, ProcessingEvent,
     DetectedCodingProblem, GeneratedSolution,
 };
-use savant_llm::LLMProvider;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolutionEvent {

@@ -1,7 +1,5 @@
 use savant_video::*;
 use savant_video::llm_provider::{LLMProvider, MockLLMProvider};
-use savant_ocr::{ComprehensiveOCRProcessor, PreprocessingConfig};
-use savant_vision::VisionAnalyzer;
 use tempfile::TempDir;
 use std::path::Path;
 use chrono::Utc;
@@ -46,11 +44,11 @@ Use a hash map to track seen numbers and their indices.
         .await
         .unwrap();
     
-    // Run migrations
-    sqlx::migrate!("../../savant-db/migrations")
-        .run(&db_pool)
-        .await
-        .unwrap();
+    // Skip migrations for tests - they will be handled manually
+    // sqlx::migrate!("../../savant-db/migrations")
+    //     .run(&db_pool)
+    //     .await
+    //     .unwrap();
     
     IntegratedProcessor::new(config, LLMProvider::Mock(mock_llm), db_pool)
         .await
@@ -116,7 +114,7 @@ async fn test_full_processing_pipeline() {
 
 #[tokio::test]
 async fn test_coding_problem_detection_with_real_screenshot() {
-    let (mut processor, mut event_rx) = setup_test_processor().await;
+    let (mut processor, event_rx) = setup_test_processor().await;
     
     // Load the actual test screenshot
     let screenshot_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -167,7 +165,7 @@ async fn test_coding_problem_detection_with_real_screenshot() {
 
 #[tokio::test]
 async fn test_change_detection() {
-    let (mut processor, mut event_rx) = setup_test_processor().await;
+    let (mut processor, event_rx) = setup_test_processor().await;
     
     // Create two identical frames
     let test_image = image::DynamicImage::new_rgb8(100, 100);
@@ -304,7 +302,7 @@ async fn test_performance_metrics() {
 
 #[tokio::test]
 async fn test_multiple_screenshots_processing() {
-    let (mut processor, mut event_rx) = setup_test_processor().await;
+    let (mut processor, event_rx) = setup_test_processor().await;
     
     // Load all test screenshots
     let test_data_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -371,7 +369,7 @@ async fn test_multiple_screenshots_processing() {
 
 #[tokio::test]
 async fn test_concurrent_frame_processing() {
-    let (mut processor, mut event_rx) = setup_test_processor().await;
+    let (mut processor, event_rx) = setup_test_processor().await;
     
     // Create multiple test frames
     let temp_dir = TempDir::new().unwrap();

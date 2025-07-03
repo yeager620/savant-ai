@@ -36,7 +36,7 @@ pub struct TextClassifier {
 impl TextClassifier {
     pub fn new() -> Self {
         let mut patterns = HashMap::new();
-        
+
         // Code patterns
         patterns.insert(TextType::CodeSnippet, vec![
             Regex::new(r"^\s*(def|function|class|interface|struct|impl|fn|let|const|var)\s+").unwrap(),
@@ -140,7 +140,7 @@ impl TextClassifier {
 
     fn classify_by_content_heuristics(&self, text: &str) -> Result<TextType> {
         let text_lower = text.to_lowercase();
-        
+
         // Check for programming-related keywords
         let code_keywords = [
             "function", "return", "import", "export", "class", "interface",
@@ -168,10 +168,12 @@ impl TextClassifier {
 
 #[derive(Debug)]
 struct UIPositionClassifier {
+    #[allow(dead_code)]
     screen_regions: HashMap<ScreenRegion, TextType>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
+#[allow(dead_code)]
 enum ScreenRegion {
     TopBar,
     BottomBar,
@@ -185,14 +187,14 @@ impl UIPositionClassifier {
         let mut screen_regions = HashMap::new();
         screen_regions.insert(ScreenRegion::TopBar, TextType::MenuBar);
         screen_regions.insert(ScreenRegion::BottomBar, TextType::StatusBar);
-        
+
         Self { screen_regions }
     }
 
     fn classify_by_position(&self, text: &str, bounding_box: &BoundingBox) -> Option<TextType> {
         // This would need screen dimensions to be truly effective
         // For now, use simple heuristics based on relative position
-        
+
         // Very small height suggests UI element
         if bounding_box.height < 30 {
             return Some(TextType::UIElement);

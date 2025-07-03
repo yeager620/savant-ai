@@ -1,10 +1,9 @@
 use anyhow::Result;
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use savant_ocr::{OCRProcessor, OCRConfig, OCRResult};
-use savant_vision::{VisionAnalyzer, ScreenAnalysis, ActivityClassification, VisualContext, DetectedApp};
+use savant_vision::{VisionAnalyzer, ScreenAnalysis, DetectedApp};
 
 use crate::FrameMetadata;
 
@@ -281,7 +280,7 @@ impl EnhancedVideoAnalyzer {
         })
     }
 
-    fn generate_text_summary(&self, ocr_result: &Option<OCRResult>, screen_analysis: &Option<ScreenAnalysis>) -> Result<TextSummary> {
+    fn generate_text_summary(&self, ocr_result: &Option<OCRResult>, _screen_analysis: &Option<ScreenAnalysis>) -> Result<TextSummary> {
         let mut summary = TextSummary {
             total_text_blocks: 0,
             code_blocks: 0,

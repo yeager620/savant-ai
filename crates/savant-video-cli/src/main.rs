@@ -1,16 +1,16 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use savant_video::{
-    create_video_capture, CaptureConfig, CaptureEvent, FrameMetadata, PrivacyController,
-    PrivacySettings, StorageManager, StorageSettings, VideoConfig, VideoFrame, VideoSession,
+    create_video_capture, CaptureConfig, FrameMetadata, PrivacyController,
+    PrivacySettings, StorageManager, StorageSettings, VideoFrame, VideoSession,
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 #[derive(Parser)]

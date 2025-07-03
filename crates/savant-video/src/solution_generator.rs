@@ -1,11 +1,10 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tracing::{debug, info, warn, error};
+use tracing::{info, warn};
 
 use crate::coding_problem_detector::{DetectedCodingProblem, CodingProblemType, ProgrammingLanguage};
-use crate::llm_provider::{LLMProvider, LLMProviderTrait, LLMRequest, LLMResponse};
+use crate::llm_provider::{LLMProvider, LLMProviderTrait, LLMRequest};
 
 #[derive(Debug, Clone)]
 pub struct SolutionGenerator {

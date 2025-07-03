@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use image::{DynamicImage, ImageFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -358,7 +358,7 @@ pub async fn batch_process_existing_files(
     png_files.sort();
     info!("Found {} PNG files to process", png_files.len());
 
-    let mut processor = VideoProcessor::new(config.clone())?;
+    let processor = VideoProcessor::new(config.clone())?;
     let mut results = Vec::new();
 
     for (i, png_path) in png_files.iter().enumerate() {

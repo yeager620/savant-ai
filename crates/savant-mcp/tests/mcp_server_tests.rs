@@ -1,11 +1,98 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use savant_mcp::{MCPServer, MCPRequest, MCPResponse};
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use tempfile::TempDir;
 use chrono::Utc;
+use std::sync::Arc;
 
-async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
+async fn setup_test_database_schema(pool: &Pool<Sqlite>) -> Result<()> {
+    // Create core conversation tables
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            title TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        "#
+    ).execute(pool).await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS transcripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            speaker_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            confidence REAL DEFAULT 1.0,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+        )
+        "#
+    ).execute(pool).await?;
+
+    // Create high-frequency video capture tables
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS hf_video_frames (
+            id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
+            timestamp_ms INTEGER NOT NULL,
+            session_id TEXT NOT NULL,
+            frame_hash TEXT NOT NULL,
+            change_score REAL DEFAULT 0.0,
+            file_path TEXT,
+            screen_resolution TEXT,
+            active_app TEXT,
+            processing_flags INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        "#
+    ).execute(pool).await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS hf_text_extractions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frame_id TEXT NOT NULL,
+            word_text TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            bbox_x INTEGER NOT NULL,
+            bbox_y INTEGER NOT NULL,
+            bbox_width INTEGER NOT NULL,
+            bbox_height INTEGER NOT NULL,
+            font_size_estimate INTEGER,
+            text_type TEXT,
+            line_id INTEGER,
+            paragraph_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (frame_id) REFERENCES hf_video_frames(id)
+        )
+        "#
+    ).execute(pool).await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS hf_detected_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frame_id TEXT NOT NULL,
+            task_type TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            description TEXT,
+            evidence_text TEXT,
+            bounding_regions TEXT,
+            assistance_suggestions TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (frame_id) REFERENCES hf_video_frames(id)
+        )
+        "#
+    ).execute(pool).await?;
+
+    Ok(())
+}
+
+async fn setup_test_server() -> Result<(Arc<MCPServer>, TempDir)> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.db");
 
@@ -14,20 +101,18 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
         .connect(&format!("sqlite:{}", db_path.display()))
         .await?;
 
-    // Run migrations
-    sqlx::migrate!("../savant-db/migrations")
-        .run(&pool)
-        .await?;
+    // Setup test database schema manually
+    setup_test_database_schema(&pool).await?;
 
     // Insert test data
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO conversations (id, started_at, title)
         VALUES ('conv-1', datetime('now', '-1 hour'), 'Test Conversation')
         "#
     ).execute(&pool).await?;
 
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO transcripts (conversation_id, timestamp, speaker_id, text, confidence)
         VALUES 
@@ -39,20 +124,21 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
     ).execute(&pool).await?;
 
     // Add visual data
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO hf_video_frames (timestamp_ms, session_id, frame_hash, change_score, active_app)
         VALUES 
-            (?1, 'session-1', 'frame-1', 0.9, 'Visual Studio Code'),
-            (?2, 'session-1', 'frame-2', 0.85, 'Chrome'),
-            (?3, 'session-1', 'frame-3', 0.7, 'Terminal')
-        "#,
-        Utc::now().timestamp_millis() - 1800000, // 30 minutes ago
-        Utc::now().timestamp_millis() - 900000,  // 15 minutes ago
-        Utc::now().timestamp_millis() - 300000,  // 5 minutes ago
-    ).execute(&pool).await?;
+            (?, 'session-1', 'frame-1', 0.9, 'Visual Studio Code'),
+            (?, 'session-1', 'frame-2', 0.85, 'Chrome'),
+            (?, 'session-1', 'frame-3', 0.7, 'Terminal')
+        "#
+    )
+    .bind(Utc::now().timestamp_millis() - 1800000)
+    .bind(Utc::now().timestamp_millis() - 900000)
+    .bind(Utc::now().timestamp_millis() - 300000)
+    .execute(&pool).await?;
 
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
         VALUES 
@@ -63,7 +149,7 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
         "#
     ).execute(&pool).await?;
 
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO hf_detected_tasks (frame_id, task_type, confidence, description, evidence_text)
         VALUES 
@@ -71,8 +157,8 @@ async fn setup_test_server() -> Result<(MCPServer, TempDir)> {
         "#
     ).execute(&pool).await?;
 
-    let database = Arc::new(savant_db::TranscriptDatabase::new(pool));
-    let server = MCPServer::new(database, None).await?;
+    let database = Arc::new(savant_db::TranscriptDatabase::new(None).await?);
+    let server = Arc::new(MCPServer::new(database, None).await?);
     Ok((server, temp_dir))
 }
 
@@ -87,17 +173,21 @@ async fn test_list_tools() {
         params: None,
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
-    if let MCPResponse::ToolsList { tools, .. } = response {
+    if let MCPResponse::ToolsList { result, .. } = response {
+        let tools = result.as_array().expect("result should be an array");
         assert!(!tools.is_empty());
 
         // Check that key tools are present
-        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-        assert!(tool_names.contains(&"query_conversations"));
-        assert!(tool_names.contains(&"search_semantic"));
-        assert!(tool_names.contains(&"get_current_activity"));
-        assert!(tool_names.contains(&"query_multimodal_context"));
+        let tool_names: Vec<String> = tools.iter()
+            .filter_map(|t| t.get("name")?.as_str())
+            .map(|s| s.to_string())
+            .collect();
+        assert!(tool_names.contains(&"query_conversations".to_string()));
+        assert!(tool_names.contains(&"search_semantic".to_string()));
+        assert!(tool_names.contains(&"get_current_activity".to_string()));
+        assert!(tool_names.contains(&"query_multimodal_context".to_string()));
     } else {
         panic!("Expected ToolsList response");
     }
@@ -130,7 +220,7 @@ async fn test_query_conversations_natural_language() {
             })),
         };
 
-        let response = server.handle_request(request).await.unwrap();
+        let response = server.handle_request(request).await;
 
         if let MCPResponse::ToolResult { content, .. } = response {
             let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -165,7 +255,7 @@ async fn test_search_semantic() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -200,7 +290,7 @@ async fn test_get_current_activity() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -235,7 +325,7 @@ async fn test_query_multimodal_context() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -273,7 +363,7 @@ async fn test_find_assistance_opportunities() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -311,7 +401,7 @@ async fn test_correlate_audio_video_events() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -336,7 +426,7 @@ async fn test_list_resources() {
         params: None,
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ResourcesList { resources, .. } = response {
         assert!(!resources.is_empty());
@@ -356,18 +446,19 @@ async fn test_complex_multimodal_query() {
     let (server, _temp_dir) = setup_test_server().await.unwrap();
 
     // Add more complex test data
-    let pool = &server.db_pool;
+    let pool = &server.database.pool;
 
     // Add a compilation error scenario
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO hf_video_frames (timestamp_ms, session_id, frame_hash, change_score, active_app)
-        VALUES (?1, 'session-2', 'error-frame', 0.95, 'Terminal')
-        "#,
-        Utc::now().timestamp_millis() - 120000, // 2 minutes ago
-    ).execute(pool).await.unwrap();
+        VALUES (?, 'session-2', 'error-frame', 0.95, 'Terminal')
+        "#
+    )
+    .bind(Utc::now().timestamp_millis() - 120000)
+    .execute(pool).await.unwrap();
 
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
         VALUES 
@@ -391,7 +482,7 @@ async fn test_complex_multimodal_query() {
         })),
     };
 
-    let response = server.handle_request(request).await.unwrap();
+    let response = server.handle_request(request).await;
 
     if let MCPResponse::ToolResult { content, .. } = response {
         let results: Value = serde_json::from_str(&content[0].text).unwrap();
@@ -418,7 +509,7 @@ async fn test_performance_with_concurrent_requests() {
     let mut handles = vec![];
 
     for i in 0..10 {
-        let server_clone = server.clone();
+        let server_clone = Arc::clone(&server);
         let handle = tokio::spawn(async move {
             let request = MCPRequest {
                 jsonrpc: "2.0".to_string(),
@@ -434,7 +525,7 @@ async fn test_performance_with_concurrent_requests() {
             };
 
             let start = std::time::Instant::now();
-            let response = server_clone.handle_request(request).await.unwrap();
+            let response = server_clone.handle_request(request).await;
             let elapsed = start.elapsed();
 
             (i, elapsed, response)

@@ -190,6 +190,7 @@ pub enum EvidenceType {
 #[derive(Debug)]
 pub struct ActivityClassifier {
     classification_rules: Vec<ClassificationRule>,
+    #[allow(dead_code)]
     context_analyzers: HashMap<String, ContextAnalyzer>,
 }
 
@@ -211,6 +212,7 @@ struct RequiredIndicator {
 
 #[derive(Debug, Clone)]
 struct OptionalIndicator {
+    #[allow(dead_code)]
     indicator_type: IndicatorType,
     pattern: String,
     bonus_weight: f32,
@@ -218,19 +220,21 @@ struct OptionalIndicator {
 
 #[derive(Debug, Clone)]
 struct ExclusionPattern {
+    #[allow(dead_code)]
     indicator_type: IndicatorType,
     pattern: String,
 }
 
 #[derive(Debug)]
 struct ContextAnalyzer {
+    #[allow(dead_code)]
     analyzer_type: String,
 }
 
 impl ActivityClassifier {
     pub fn new() -> Self {
         let mut classification_rules = Vec::new();
-        
+
         // Coding activity rules
         classification_rules.push(ClassificationRule {
             activity: Activity::Coding {
@@ -325,7 +329,7 @@ impl ActivityClassifier {
         app_context: &AppContext,
         visual_elements: &[VisualElement],
     ) -> Result<ActivityClassification> {
-        
+
         let mut activity_scores: HashMap<String, f32> = HashMap::new();
         let mut all_evidence: Vec<Evidence> = Vec::new();
         let mut context_indicators: Vec<ContextIndicator> = Vec::new();

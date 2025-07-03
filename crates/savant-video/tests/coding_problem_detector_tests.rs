@@ -1,9 +1,11 @@
 use savant_video::coding_problem_detector::*;
-use savant_ocr::{ComprehensiveOCRResult, WordData, LineData, ParagraphData, BoundingBox as OcrBoundingBox, TextType};
+use savant_ocr::{ComprehensiveOCRResult, WordData, LineData, ParagraphData, BoundingBox as OcrBoundingBox};
 use savant_vision::{
     ScreenAnalysis, DetectedApp, ActivityClassification, VisualContext, AppContext, AppType, 
-    IDEType, WindowState, Activity, Evidence, ThemeInfo, ImageMetadata, BoundingBox as VisionBoundingBox
+    IDEType, WindowState, Activity, ImageMetadata
 };
+use savant_vision::classifier::ContextIndicator;
+use savant_vision::analyzer::{LayoutAnalysis, LayoutType, ThemeInfo as AnalyzerThemeInfo};
 use chrono::Utc;
 
 fn create_test_ocr_result(text_content: &str) -> ComprehensiveOCRResult {
@@ -28,7 +30,7 @@ fn create_test_ocr_result(text_content: &str) -> ComprehensiveOCRResult {
 
     let paragraph = ParagraphData {
         text: text_content.to_string(),
-        bounding_box: BoundingBox {
+        bounding_box: OcrBoundingBox {
             x: 0,
             y: 100,
             width: 800,
@@ -64,13 +66,14 @@ fn create_test_vision_analysis() -> ScreenAnalysis {
                 app_name: Some("Visual Studio Code".to_string()),
                 confidence: 0.9,
                 visual_indicators: vec![],
-                screen_region: BoundingBox {
+                screen_region: savant_vision::BoundingBox {
                     x: 0,
                     y: 0,
                     width: 1920,
-                    height: 1080
+                    height: 1080,
+                    confidence: 0.9,
                 },
-                window_state: WindowState::Active,
+                window_state: WindowState::Focused,
             }],
             active_windows: vec![],
             browser_context: None,
@@ -79,23 +82,43 @@ fn create_test_vision_analysis() -> ScreenAnalysis {
             desktop_environment: None,
         },
         activity_classification: ActivityClassification {
-            primary_activity: Activity::Coding,
+            primary_activity: Activity::Coding {
+                language: Some("Python".to_string()),
+                editor: "VSCode".to_string(),
+                project_type: Some("Algorithm".to_string()),
+                debugging: false,
+            },
             secondary_activities: vec![],
-            context_indicators: vec![Evidence {
-                description: "IDE detected".to_string(),
+            context_indicators: vec![ContextIndicator {
+                indicator_type: savant_vision::classifier::IndicatorType::WindowTitle,
+                value: "IDE detected".to_string(),
                 confidence: 0.85,
-                source: "visual".to_string(),
+                source: savant_vision::classifier::IndicatorSource::VisualAnalysis,
             }],
+            confidence: 0.9,
+            evidence: vec![],
         },
         visual_context: VisualContext {
-            layout_analysis: "Standard IDE layout".to_string(),
+            dominant_colors: vec!["#1e1e1e".to_string(), "#007acc".to_string()],
+            layout_analysis: LayoutAnalysis {
+                layout_type: LayoutType::TwoColumn,
+                grid_structure: None,
+                primary_content_area: None,
+                sidebar_present: true,
+                header_present: false,
+                footer_present: false,
+            },
             attention_areas: vec![],
             interaction_elements: vec![],
             content_regions: vec![],
-            theme_info: ThemeInfo {
+            theme_info: AnalyzerThemeInfo {
                 is_dark_mode: true,
+                primary_color: Some("#1e1e1e".to_string()),
+                secondary_color: None,
                 accent_color: None,
-                wallpaper_type: None,
+                background_color: "#1e1e1e".to_string(),
+                text_color: "#d4d4d4".to_string(),
+                contrast_ratio: 14.0,
             },
         },
         processing_time_ms: 50,
@@ -177,7 +200,7 @@ async fn test_detect_hackerrank_challenge() {
     ocr_result.paragraphs[0].bounding_box.y = 50; // Near top of screen
 
     let mut vision_analysis = create_test_vision_analysis();
-    vision_analysis.detected_applications[0].name = "Chrome - HackerRank".to_string();
+    vision_analysis.app_context.detected_applications[0].app_name = Some("Chrome - HackerRank".to_string());
 
     let problems = detector.detect_problems(&ocr_result, &vision_analysis).await.unwrap();
 
@@ -208,7 +231,7 @@ async fn test_detect_leetcode_challenge() {
 
     let ocr_result = create_test_ocr_result(challenge_text);
     let mut vision_analysis = create_test_vision_analysis();
-    vision_analysis.detected_applications[0].name = "Chrome - LeetCode".to_string();
+    vision_analysis.app_context.detected_applications[0].app_name = Some("Chrome - LeetCode".to_string());
 
     let problems = detector.detect_problems(&ocr_result, &vision_analysis).await.unwrap();
 
@@ -290,10 +313,7 @@ async fn test_programming_language_detection() {
 
 #[tokio::test]
 async fn test_context_buffer_management() {
-    let mut detector = CodingProblemDetector::new(DetectionConfig {
-        buffer_size: 3,
-        ..Default::default()
-    });
+    let mut detector = CodingProblemDetector::new(DetectionConfig::default());
 
     // Add multiple screens to buffer
     for i in 0..5 {

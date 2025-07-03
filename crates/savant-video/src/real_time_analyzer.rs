@@ -2,8 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::debug;
 
 use savant_ocr::ComprehensiveOCRResult;
 use savant_vision::ScreenAnalysis;

@@ -134,7 +134,8 @@ The error was caused by a missing semicolon. In Python, statements don't require
     let solution = generator.generate_solution(&problem).await.unwrap();
     
     assert!(solution.solution_code.contains("print"));
-    assert!(solution.explanation.unwrap().contains("semicolon") || solution.explanation.unwrap().contains("parenthesis"));
+    let explanation = solution.explanation.unwrap();
+    assert!(explanation.contains("semicolon") || explanation.contains("parenthesis"));
 }
 
 #[tokio::test]

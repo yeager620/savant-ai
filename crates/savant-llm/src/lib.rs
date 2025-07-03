@@ -2,7 +2,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use savant_core::LlmRequest as CoreLlmRequest;
-use savant_core::LlmProvider as CoreLlmProvider;
 
 // Re-export the mock module
 pub mod mock;
@@ -43,14 +42,14 @@ pub struct LLMResponse {
 pub trait LLMProvider {
     /// Complete a prompt with the LLM
     async fn complete(&self, request: LLMRequest) -> Result<LLMResponse>;
-    
+
     /// Complete a prompt with streaming response
     async fn complete_streaming(
         &self,
         request: LLMRequest,
         callback: Box<dyn Fn(String) + Send>,
     ) -> Result<LLMResponse>;
-    
+
     /// List available models
     async fn list_models(&self) -> Result<Vec<String>>;
 }

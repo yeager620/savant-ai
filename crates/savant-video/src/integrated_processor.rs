@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn, error};
 
 use crate::{
-    VideoFrame, FrameMetadata,
+    VideoFrame,
     real_time_analyzer::RealTimeAnalyzer,
     coding_problem_detector::{CodingProblemDetector, DetectedCodingProblem, DetectionConfig},
     solution_generator::{SolutionGenerator, GeneratedSolution, SolutionConfig},
@@ -304,7 +304,7 @@ impl IntegratedProcessor {
         ocr_result: &savant_ocr::ComprehensiveOCRResult,
     ) -> Result<()> {
         // Store text extractions in the high-frequency database
-        for (word_idx, word) in ocr_result.words.iter().enumerate() {
+        for (_word_idx, word) in ocr_result.words.iter().enumerate() {
             sqlx::query(
                 r#"
                 INSERT INTO hf_text_extractions (

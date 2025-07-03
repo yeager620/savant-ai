@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::{VideoFrame, VideoAnalysisResult};
 
@@ -613,8 +612,8 @@ impl CorrelationEngine {
     }
 
     fn assess_activity_coherence(&self, _video_frame: &VideoFrame, audio_context: &Option<AudioContext>) -> Result<ActivityCoherence> {
-        let mut coherence_score = 1.0;
-        let mut anomalies = Vec::new();
+        let coherence_score = 1.0;
+        let anomalies = Vec::new();
 
         if let Some(audio) = audio_context {
             // Check for audio-visual coherence

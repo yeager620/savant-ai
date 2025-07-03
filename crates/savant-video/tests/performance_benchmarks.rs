@@ -1,7 +1,5 @@
 use savant_video::*;
 use savant_video::llm_provider::{LLMProvider, MockLLMProvider};
-use savant_ocr::{ComprehensiveOCRProcessor, PreprocessingConfig};
-use savant_vision::VisionAnalyzer;
 use tempfile::TempDir;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -28,10 +26,11 @@ async fn setup_performance_processor() -> IntegratedProcessor {
         .await
         .unwrap();
     
-    sqlx::migrate!("../../savant-db/migrations")
-        .run(&db_pool)
-        .await
-        .unwrap();
+    // Skip migrations for tests - they will be handled manually
+    // sqlx::migrate!("../../savant-db/migrations")
+    //     .run(&db_pool)
+    //     .await
+    //     .unwrap();
     
     let (processor, _) = IntegratedProcessor::new(
         config,

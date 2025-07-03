@@ -2,10 +2,8 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, info, warn};
 
-use crate::real_time_analyzer::{DetectedTask, TaskType};
-use savant_ocr::{ComprehensiveOCRResult, TextType};
+use savant_ocr::ComprehensiveOCRResult;
 use savant_vision::ScreenAnalysis;
 
 #[derive(Debug, Clone)]
@@ -382,7 +380,7 @@ impl CodingProblemDetector {
     async fn detect_algorithm_challenge(
         &self,
         ocr_result: &ComprehensiveOCRResult,
-        vision_analysis: &ScreenAnalysis,
+        _vision_analysis: &ScreenAnalysis,
     ) -> Result<Option<DetectedCodingProblem>> {
         let mut platform_confidence = HashMap::new();
         let mut problem_elements = ProblemElements::default();

@@ -52,16 +52,17 @@ pub struct PatternMatch {
 #[derive(Debug)]
 pub struct PatternMatcher {
     patterns: HashMap<String, VisualPattern>,
+    #[allow(dead_code)]
     app_patterns: AppPatternDatabase,
 }
 
 impl PatternMatcher {
     pub fn new() -> Self {
         let mut patterns = HashMap::new();
-        
+
         // Load built-in patterns
         Self::load_builtin_patterns(&mut patterns);
-        
+
         Self {
             patterns,
             app_patterns: AppPatternDatabase::new(),
@@ -244,7 +245,7 @@ impl PatternMatcher {
 
         for indicator in &pattern.indicators {
             let indicator_score = self.evaluate_indicator(image, indicator, context).await?;
-            
+
             if indicator_score > 0.0 {
                 total_score += indicator_score * indicator.weight;
                 matched_indicators.push(indicator.value.clone());
@@ -307,7 +308,7 @@ impl PatternMatcher {
         let diff_r = (color1[0] as i16 - color2[0] as i16).abs();
         let diff_g = (color1[1] as i16 - color2[1] as i16).abs();
         let diff_b = (color1[2] as i16 - color2[2] as i16).abs();
-        
+
         diff_r <= tolerance as i16 && diff_g <= tolerance as i16 && diff_b <= tolerance as i16
     }
 
@@ -345,17 +346,17 @@ impl PatternMatcher {
                 // Check if any elements are in the center area
                 let screen_center_x = context.screen_width / 2;
                 let screen_center_y = context.screen_height / 2;
-                
+
                 for element in &context.visual_elements {
                     let element_center_x = element.x + element.width / 2;
                     let element_center_y = element.y + element.height / 2;
-                    
+
                     let distance_from_center = ((element_center_x as f32 - screen_center_x as f32).powi(2) + 
                                                (element_center_y as f32 - screen_center_y as f32).powi(2)).sqrt();
-                    
+
                     let max_distance = ((context.screen_width * context.screen_width + 
                                        context.screen_height * context.screen_height) as f32).sqrt();
-                    
+
                     let center_score = 1.0 - (distance_from_center / max_distance);
                     if center_score > 0.7 {
                         return Ok(center_score);
@@ -379,7 +380,7 @@ impl PatternMatcher {
                 let rectangular_elements: Vec<_> = context.visual_elements.iter()
                     .filter(|e| e.width > 100 && e.height > 80) // Video-sized elements
                     .collect();
-                
+
                 if rectangular_elements.len() >= 4 {
                     Ok(0.8)
                 } else if rectangular_elements.len() >= 2 {
@@ -396,7 +397,7 @@ impl PatternMatcher {
                 let center_elements = context.visual_elements.iter()
                     .filter(|e| e.x > context.screen_width / 4 && e.x < 3 * context.screen_width / 4)
                     .count();
-                
+
                 if left_elements > 0 && center_elements > 0 {
                     Ok(0.7)
                 } else {
@@ -408,7 +409,7 @@ impl PatternMatcher {
                 let top_elements = context.visual_elements.iter()
                     .filter(|e| e.y < context.screen_height / 10)
                     .count();
-                
+
                 if top_elements > 3 {
                     Ok(0.6)
                 } else {
@@ -444,24 +445,32 @@ pub struct ElementBounds {
 
 #[derive(Debug)]
 struct AppPatternDatabase {
+    #[allow(dead_code)]
     patterns: HashMap<String, AppPattern>,
 }
 
 #[derive(Debug, Clone)]
 struct AppPattern {
+    #[allow(dead_code)]
     app_name: String,
+    #[allow(dead_code)]
     visual_signatures: Vec<VisualSignature>,
+    #[allow(dead_code)]
     confidence_threshold: f32,
 }
 
 #[derive(Debug, Clone)]
 struct VisualSignature {
+    #[allow(dead_code)]
     signature_type: SignatureType,
+    #[allow(dead_code)]
     data: Vec<u8>,
+    #[allow(dead_code)]
     weight: f32,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum SignatureType {
     ColorHistogram,
     EdgePattern,

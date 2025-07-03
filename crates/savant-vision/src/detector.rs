@@ -36,16 +36,22 @@ impl ObjectDetector {
 
 #[derive(Debug)]
 pub struct UIDetector {
+    #[allow(dead_code)]
     button_patterns: Vec<ButtonPattern>,
     window_detector: WindowDetector,
 }
 
 #[derive(Debug, Clone)]
 struct ButtonPattern {
+    #[allow(dead_code)]
     min_width: u32,
+    #[allow(dead_code)]
     max_width: u32,
+    #[allow(dead_code)]
     min_height: u32,
+    #[allow(dead_code)]
     max_height: u32,
+    #[allow(dead_code)]
     corner_radius_threshold: f32,
 }
 
@@ -86,7 +92,7 @@ impl UIDetector {
 
         // Convert to RGBA for processing
         let rgba_image = image.to_rgba8();
-        
+
         // Detect buttons using edge detection and shape analysis
         let buttons = self.detect_buttons(&rgba_image)?;
         elements.extend(buttons);
@@ -104,10 +110,10 @@ impl UIDetector {
 
     fn detect_buttons(&self, image: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Result<Vec<VisualElement>> {
         let mut buttons = Vec::new();
-        
+
         // Simple edge-based button detection
         let (width, height) = image.dimensions();
-        
+
         // Scan for rectangular regions with consistent borders
         for y in 0..height.saturating_sub(50) {
             for x in 0..width.saturating_sub(50) {
@@ -124,7 +130,7 @@ impl UIDetector {
         // Analyze a region to see if it looks like a button
         let sample_width = 100;
         let sample_height = 30;
-        
+
         if x + sample_width >= image.width() || y + sample_height >= image.height() {
             return Ok(None);
         }
@@ -139,7 +145,7 @@ impl UIDetector {
         if self.pixels_similar(top_left, top_right, 20) && 
            self.pixels_similar(top_left, bottom_left, 20) &&
            self.pixels_similar(top_left, bottom_right, 20) {
-            
+
             return Ok(Some(VisualElement {
                 element_type: ElementType::Button,
                 bounding_box: BoundingBox {
@@ -167,7 +173,7 @@ impl UIDetector {
         let diff_r = (p1[0] as i16 - p2[0] as i16).abs();
         let diff_g = (p1[1] as i16 - p2[1] as i16).abs();
         let diff_b = (p1[2] as i16 - p2[2] as i16).abs();
-        
+
         diff_r <= threshold as i16 && diff_g <= threshold as i16 && diff_b <= threshold as i16
     }
 
@@ -211,17 +217,17 @@ impl AppDetector {
 
     pub async fn detect_applications(&self, image: &DynamicImage, visual_elements: &[VisualElement]) -> Result<AppContext> {
         let mut detected_applications = Vec::new();
-        
+
         // Analyze visual signatures for known applications
         let app_detections = self.app_signatures.match_signatures(image, visual_elements).await?;
         detected_applications.extend(app_detections);
 
         // Detect browser context
         let browser_context = self.detect_browser_context(image, visual_elements).await?;
-        
+
         // Detect IDE context
         let ide_context = self.detect_ide_context(image, visual_elements).await?;
-        
+
         // Detect meeting context
         let meeting_context = self.detect_meeting_context(image, visual_elements).await?;
 
@@ -259,15 +265,20 @@ struct AppSignatureDatabase {
 #[derive(Debug, Clone)]
 struct AppSignature {
     app_type: AppType,
+    #[allow(dead_code)]
     visual_patterns: Vec<VisualPattern>,
     color_patterns: Vec<ColorPattern>,
+    #[allow(dead_code)]
     text_patterns: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 struct VisualPattern {
+    #[allow(dead_code)]
     pattern_type: String,
+    #[allow(dead_code)]
     template: Vec<u8>, // Would store template image data
+    #[allow(dead_code)]
     threshold: f32,
 }
 
@@ -280,7 +291,7 @@ struct ColorPattern {
 impl AppSignatureDatabase {
     fn new() -> Self {
         let mut signatures = Vec::new();
-        
+
         // Add signatures for common applications
         signatures.push(AppSignature {
             app_type: AppType::VideoConferencing(crate::VideoConferencingApp::Zoom),
@@ -311,7 +322,7 @@ impl AppSignatureDatabase {
 
     async fn match_signatures(&self, image: &DynamicImage, visual_elements: &[VisualElement]) -> Result<Vec<DetectedApp>> {
         let mut detected_apps = Vec::new();
-        
+
         for signature in &self.signatures {
             if let Some(detected_app) = self.match_signature(image, visual_elements, signature).await? {
                 detected_apps.push(detected_app);
@@ -364,7 +375,7 @@ impl AppSignatureDatabase {
 
         for pattern in patterns {
             let mut matching_pixels = 0;
-            
+
             for pixel in rgba_image.pixels() {
                 for target_color in &pattern.dominant_colors {
                     if self.color_matches(&[pixel[0], pixel[1], pixel[2]], target_color, pattern.tolerance) {
@@ -373,7 +384,7 @@ impl AppSignatureDatabase {
                     }
                 }
             }
-            
+
             let score = matching_pixels as f32 / total_pixels;
             max_score = max_score.max(score);
         }
@@ -385,7 +396,7 @@ impl AppSignatureDatabase {
         let diff_r = (pixel[0] as i16 - target[0] as i16).abs();
         let diff_g = (pixel[1] as i16 - target[1] as i16).abs();
         let diff_b = (pixel[2] as i16 - target[2] as i16).abs();
-        
+
         diff_r <= tolerance as i16 && diff_g <= tolerance as i16 && diff_b <= tolerance as i16
     }
 }

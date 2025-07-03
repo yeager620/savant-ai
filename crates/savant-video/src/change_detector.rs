@@ -1,11 +1,10 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use image::{DynamicImage, ImageBuffer, Rgba};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use tracing::{debug, warn};
+use tracing::debug;
 
-use crate::{VideoFrame, FrameMetadata};
+use crate::VideoFrame;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeDetectionResult {
