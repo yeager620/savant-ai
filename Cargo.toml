@@ -34,7 +34,8 @@ members = [
     "crates/savant-video-cli",
     "crates/savant-ocr",
     "crates/savant-vision",
-    "crates/savant-sync"
+    "crates/savant-sync",
+    "crates/e2e-coding-detection"
 ]
 resolver = "2"
 

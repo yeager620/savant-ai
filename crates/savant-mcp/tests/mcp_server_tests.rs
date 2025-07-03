@@ -12,23 +12,30 @@ async fn setup_test_database_schema(pool: &Pool<Sqlite>) -> Result<()> {
         r#"
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY,
-            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             title TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            start_time DATETIME NOT NULL,
+            end_time DATETIME,
+            context TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         "#
     ).execute(pool).await?;
 
     sqlx::query(
         r#"
-        CREATE TABLE IF NOT EXISTS transcripts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS segments (
+            id TEXT PRIMARY KEY,
             conversation_id TEXT NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            speaker_id TEXT NOT NULL,
+            timestamp DATETIME NOT NULL,
+            speaker TEXT NOT NULL,
+            audio_source TEXT NOT NULL,
             text TEXT NOT NULL,
-            confidence REAL DEFAULT 1.0,
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+            start_time REAL NOT NULL,
+            end_time REAL NOT NULL,
+            confidence REAL,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         )
         "#
     ).execute(pool).await?;
@@ -98,7 +105,7 @@ async fn setup_test_server() -> Result<(Arc<MCPServer>, TempDir)> {
 
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
-        .connect(&format!("sqlite:{}", db_path.display()))
+        .connect(&format!("sqlite://{}?mode=rwc", db_path.display()))
         .await?;
 
     // Setup test database schema manually
@@ -107,34 +114,41 @@ async fn setup_test_server() -> Result<(Arc<MCPServer>, TempDir)> {
     // Insert test data
     sqlx::query(
         r#"
-        INSERT INTO conversations (id, started_at, title)
+        INSERT INTO conversations (id, start_time, title)
         VALUES ('conv-1', datetime('now', '-1 hour'), 'Test Conversation')
         "#
     ).execute(&pool).await?;
 
     sqlx::query(
         r#"
-        INSERT INTO transcripts (conversation_id, timestamp, speaker_id, text, confidence)
+        INSERT INTO segments (id, conversation_id, timestamp, speaker, audio_source, text, start_time, end_time, confidence)
         VALUES 
-            ('conv-1', datetime('now', '-30 minutes'), 'user', 'How do I implement a binary search tree?', 0.95),
-            ('conv-1', datetime('now', '-29 minutes'), 'assistant', 'To implement a binary search tree, you need to create a Node class...', 0.98),
-            ('conv-1', datetime('now', '-15 minutes'), 'user', 'Can you show me the code in Python?', 0.93),
-            ('conv-1', datetime('now', '-14 minutes'), 'assistant', 'Here is a Python implementation of a binary search tree...', 0.97)
+            ('seg-1', 'conv-1', datetime('now', '-30 minutes'), 'user', 'microphone', 'How do I implement a binary search tree?', 0.0, 5.0, 0.95),
+            ('seg-2', 'conv-1', datetime('now', '-29 minutes'), 'assistant', 'system', 'To implement a binary search tree, you need to create a Node class...', 0.0, 15.0, 0.98),
+            ('seg-3', 'conv-1', datetime('now', '-15 minutes'), 'user', 'microphone', 'Can you show me the code in Python?', 0.0, 3.0, 0.93),
+            ('seg-4', 'conv-1', datetime('now', '-14 minutes'), 'assistant', 'system', 'Here is a Python implementation of a binary search tree...', 0.0, 20.0, 0.97)
         "#
     ).execute(&pool).await?;
 
-    // Add visual data
+    // Add visual data with proper frame IDs
+    let frame_1_id = "frame-1-id";
+    let frame_2_id = "frame-2-id"; 
+    let frame_3_id = "frame-3-id";
+    
     sqlx::query(
         r#"
-        INSERT INTO hf_video_frames (timestamp_ms, session_id, frame_hash, change_score, active_app)
+        INSERT INTO hf_video_frames (id, timestamp_ms, session_id, frame_hash, change_score, active_app)
         VALUES 
-            (?, 'session-1', 'frame-1', 0.9, 'Visual Studio Code'),
-            (?, 'session-1', 'frame-2', 0.85, 'Chrome'),
-            (?, 'session-1', 'frame-3', 0.7, 'Terminal')
+            (?, ?, 'session-1', 'frame-1', 0.9, 'Visual Studio Code'),
+            (?, ?, 'session-1', 'frame-2', 0.85, 'Chrome'),
+            (?, ?, 'session-1', 'frame-3', 0.7, 'Terminal')
         "#
     )
+    .bind(frame_1_id)
     .bind(Utc::now().timestamp_millis() - 1800000)
+    .bind(frame_2_id)
     .bind(Utc::now().timestamp_millis() - 900000)
+    .bind(frame_3_id)
     .bind(Utc::now().timestamp_millis() - 300000)
     .execute(&pool).await?;
 
@@ -142,22 +156,29 @@ async fn setup_test_server() -> Result<(Arc<MCPServer>, TempDir)> {
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
         VALUES 
-            ('frame-1', 'class', 0.98, 100, 200, 50, 20, 'CodeSnippet'),
-            ('frame-1', 'BinarySearchTree', 0.97, 150, 200, 150, 20, 'CodeSnippet'),
-            ('frame-2', 'LeetCode', 0.99, 500, 100, 100, 30, 'UIElement'),
-            ('frame-3', 'python', 0.95, 200, 300, 60, 18, 'CommandLine')
+            (?, 'class', 0.98, 100, 200, 50, 20, 'CodeSnippet'),
+            (?, 'BinarySearchTree', 0.97, 150, 200, 150, 20, 'CodeSnippet'),
+            (?, 'LeetCode', 0.99, 500, 100, 100, 30, 'UIElement'),
+            (?, 'python', 0.95, 200, 300, 60, 18, 'CommandLine')
         "#
-    ).execute(&pool).await?;
+    )
+    .bind(frame_1_id)
+    .bind(frame_1_id)
+    .bind(frame_2_id)
+    .bind(frame_3_id)
+    .execute(&pool).await?;
 
     sqlx::query(
         r#"
         INSERT INTO hf_detected_tasks (frame_id, task_type, confidence, description, evidence_text)
         VALUES 
-            ('frame-1', 'CodingProblem', 0.92, 'Implementing binary search tree', '{"language": "Python", "complexity": "Medium"}')
+            (?, 'CodingProblem', 0.92, 'Implementing binary search tree', '{"language": "Python", "complexity": "Medium"}')
         "#
-    ).execute(&pool).await?;
+    )
+    .bind(frame_1_id)
+    .execute(&pool).await?;
 
-    let database = Arc::new(savant_db::TranscriptDatabase::new(None).await?);
+    let database = Arc::new(savant_db::TranscriptDatabase::new(Some(db_path.clone())).await?);
     let server = Arc::new(MCPServer::new(database, None).await?);
     Ok((server, temp_dir))
 }
@@ -449,12 +470,14 @@ async fn test_complex_multimodal_query() {
     let pool = &server.database.pool;
 
     // Add a compilation error scenario
+    let error_frame_id = "error-frame-id";
     sqlx::query(
         r#"
-        INSERT INTO hf_video_frames (timestamp_ms, session_id, frame_hash, change_score, active_app)
-        VALUES (?, 'session-2', 'error-frame', 0.95, 'Terminal')
+        INSERT INTO hf_video_frames (id, timestamp_ms, session_id, frame_hash, change_score, active_app)
+        VALUES (?, ?, 'session-2', 'error-frame', 0.95, 'Terminal')
         "#
     )
+    .bind(error_frame_id)
     .bind(Utc::now().timestamp_millis() - 120000)
     .execute(pool).await.unwrap();
 
@@ -462,11 +485,15 @@ async fn test_complex_multimodal_query() {
         r#"
         INSERT INTO hf_text_extractions (frame_id, word_text, confidence, bbox_x, bbox_y, bbox_width, bbox_height, text_type)
         VALUES 
-            ('error-frame', 'SyntaxError:', 0.99, 100, 400, 100, 20, 'ErrorMessage'),
-            ('error-frame', 'unexpected', 0.98, 200, 400, 80, 20, 'ErrorMessage'),
-            ('error-frame', 'indent', 0.97, 280, 400, 60, 20, 'ErrorMessage')
+            (?, 'SyntaxError:', 0.99, 100, 400, 100, 20, 'ErrorMessage'),
+            (?, 'unexpected', 0.98, 200, 400, 80, 20, 'ErrorMessage'),
+            (?, 'indent', 0.97, 280, 400, 60, 20, 'ErrorMessage')
         "#
-    ).execute(pool).await.unwrap();
+    )
+    .bind(error_frame_id)
+    .bind(error_frame_id)
+    .bind(error_frame_id)
+    .execute(pool).await.unwrap();
 
     // Query for error context
     let request = MCPRequest {
