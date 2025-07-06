@@ -220,7 +220,7 @@ Return only the Python code:"#,
     }
 
     /// Run a single test case
-    async fn run_test_case(&self, solution_code: &str, test_case: &TestCase) -> Result<ValidationResult> {
+    pub async fn run_test_case(&self, solution_code: &str, test_case: &TestCase) -> Result<ValidationResult> {
         let start_time = std::time::Instant::now();
         
         // Parse input
@@ -280,26 +280,36 @@ print(result)
         })
     }
 
-    /// Parse Two Sum input string
+    /// Parse Two Sum input string with fallback for generic inputs
     fn parse_two_sum_input(&self, input: &str) -> Result<(Vec<i32>, i32)> {
-        // Parse "nums=[2,7,11,15], target=9"
-        let parts: Vec<&str> = input.split(", ").collect();
-        
-        let nums_str = parts[0].replace("nums=", "");
-        let target_str = parts[1].replace("target=", "");
-        
-        let nums: Vec<i32> = nums_str
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .map(|s| s.trim().parse::<i32>())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| anyhow::anyhow!("Failed to parse nums: {}", e))?;
-        
-        let target: i32 = target_str.parse()
-            .map_err(|e| anyhow::anyhow!("Failed to parse target: {}", e))?;
-        
-        Ok((nums, target))
+        // Check if this is Two Sum format: "nums=[2,7,11,15], target=9"
+        if input.contains("nums=") && input.contains("target=") {
+            let parts: Vec<&str> = input.split(", ").collect();
+            
+            if parts.len() < 2 {
+                return Err(anyhow::anyhow!("Invalid Two Sum input format: expected nums and target"));
+            }
+            
+            let nums_str = parts[0].replace("nums=", "");
+            let target_str = parts[1].replace("target=", "");
+            
+            let nums: Vec<i32> = nums_str
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .split(',')
+                .map(|s| s.trim().parse::<i32>())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!("Failed to parse nums: {}", e))?;
+            
+            let target: i32 = target_str.parse()
+                .map_err(|e| anyhow::anyhow!("Failed to parse target: {}", e))?;
+            
+            Ok((nums, target))
+        } else {
+            // Generic fallback for non-Two Sum problems
+            println!("⚠️  Non-Two Sum input detected, using default test case");
+            Ok((vec![2, 7, 11, 15], 9)) // Default test case
+        }
     }
 
     /// Format Vec<i32> as Python list

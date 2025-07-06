@@ -15,6 +15,18 @@ path = "src/mock_demo.rs"
 name = "optimized_demo"
 path = "src/optimized_demo.rs"
 
+[[bin]]
+name = "hackerrank_hard_test"
+path = "src/hackerrank_hard_test.rs"
+
+[[bin]]
+name = "test_suite_runner"
+path = "src/test_suite_runner.rs"
+
+[[bin]]
+name = "quick_demo"
+path = "src/quick_demo.rs"
+
 [dependencies]
 # Core dependencies
 anyhow = { workspace = true }

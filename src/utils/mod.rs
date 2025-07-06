@@ -1,4 +1,3 @@
-mod llm;
 pub mod shared_types;
 mod ocr;
 

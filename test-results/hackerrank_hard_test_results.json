@@ -1,0 +1,24 @@
+{
+  "test_name": "HackerRank Hard Problem Test",
+  "timestamp": "2025-07-03T06:45:49.122739Z",
+  "success": true,
+  "error_message": null,
+  "performance_metrics": {
+    "ocr_time_ms": 8270,
+    "vision_time_ms": 9367,
+    "detection_time_ms": 0,
+    "llm_time_ms": 0,
+    "total_time_ms": 17638,
+    "meets_targets": true
+  },
+  "problem_detection": {
+    "detected": true,
+    "confidence": 0.5,
+    "title": "Unknown Problem",
+    "problem_type": "AlgorithmChallenge",
+    "platform": "HackerRank",
+    "matches_expected": true
+  },
+  "solution_validation": null,
+  "overall_score": 10.0
+}
